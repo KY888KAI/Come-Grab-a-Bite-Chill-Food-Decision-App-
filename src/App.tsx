@@ -465,7 +465,7 @@ function runSelfTests() {
   }
 }
 
-export default function WhatNowApp() {
+export default function App() {
   const { log, setLog } = useLocalStorageLog();
 
   const [screen, setScreen] = useState<Screen>("home");
@@ -1072,4 +1072,3 @@ export default function WhatNowApp() {
     </div>
   );
 }
-
