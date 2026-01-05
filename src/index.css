@@ -10,5 +10,6 @@
 
 body {
   margin: 0;
-  background-color: #FAF9F6; /* 米色背景 */
+  /* 背景色設定，避免載入時閃爍 */
+  background-color: #FAF9F6; 
 }
