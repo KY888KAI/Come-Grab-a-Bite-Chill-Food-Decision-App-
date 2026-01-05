@@ -2,9 +2,8 @@
 // 它運行在後端，所以可以安全地使用 process.env.GOOGLE_MAPS_API_KEY
 
 export default async function handler(req, res) {
-  // 1. 為了安全性，限制只有你的 GitHub Pages 網址可以呼叫 (上線前建議設定)
-  // res.setHeader('Access-Control-Allow-Origin', 'https://your-username.github.io');
-  res.setHeader('Access-Control-Allow-Origin', '*'); // 目前先允許所有來源方便測試
+  // 1. 設定 CORS
+  res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -19,14 +18,14 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing location data" });
   }
 
-  // 3. 從 Vercel 環境變數拿鑰匙 (記得在 Vercel 後台設定 GOOGLE_MAPS_API_KEY)
+  // 3. 從 Vercel 環境變數拿鑰匙
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
   if (!apiKey) {
     return res.status(500).json({ error: "Server Configuration Error: Missing API Key" });
   }
 
-  // 4. 呼叫 Google Places API (New) - Text Search
+  // 4. 呼叫 Google Places API (New)
   const googleApiUrl = "https://places.googleapis.com/v1/places:searchText";
 
   try {
@@ -35,7 +34,7 @@ export default async function handler(req, res) {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        // 只抓取需要的欄位以節省成本
+        // 只抓取需要的欄位
         "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.priceLevel,places.businessStatus"
       },
       body: JSON.stringify({
@@ -43,22 +42,24 @@ export default async function handler(req, res) {
         locationBias: {
           circle: {
             center: { latitude: lat, longitude: lng },
-            radius: 1000.0 // 搜尋半徑 1公里
+            radius: 1000.0 // 1公里
           }
         },
-        openNow: true, // 只找營業中
+        openNow: true,
         maxResultCount: 20
       })
     });
 
     if (!googleRes.ok) {
+      // ⚠️ 關鍵修改：捕捉 Google 回傳的詳細錯誤文字
       const errorText = await googleRes.text();
-      throw new Error(`Google API Error: ${googleRes.status} ${errorText}`);
+      console.error(`Google API Error (${googleRes.status}):`, errorText);
+      throw new Error(`Google 拒絕連線 (${googleRes.status}): ${errorText}`);
     }
 
     const data = await googleRes.json();
 
-    // 5. 整理資料回傳給前端
+    // 5. 整理資料
     const cleanPlaces = (data.places || []).map(p => ({
       id: p.id,
       name: p.displayName?.text,
@@ -66,7 +67,6 @@ export default async function handler(req, res) {
       lng: p.location?.longitude,
       rating: p.rating,
       userRatingsTotal: p.userRatingCount,
-      // 將 Google 的價格等級轉換為我們的格式
       price: (p.priceLevel === 'PRICE_LEVEL_INEXPENSIVE' || !p.priceLevel) ? 'budget' : 'mid',
       googlePlaceId: p.id,
       openNow: p.businessStatus === 'OPERATIONAL'
@@ -76,6 +76,10 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Backend Error:", error);
-    res.status(500).json({ error: "Failed to fetch places from Google" });
+    // ⚠️ 關鍵修改：將詳細錯誤回傳給前端，讓您在畫面上看得到
+    res.status(500).json({ 
+      error: "Google API 呼叫失敗", 
+      details: error.message 
+    });
   }
 }
