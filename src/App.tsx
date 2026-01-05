@@ -14,7 +14,7 @@ const GEMINI_API_KEY = "";
 // 2. 後端轉接站網址 (Vercel Serverless Function)
 // 請填入您部署在 Vercel 的完整網址
 // 例如: "https://grab-a-bite.vercel.app/api/places"
-const BACKEND_API_URL = ""; 
+const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decisio.vercel.app/api/places"; 
 
 // ==========================================
 
