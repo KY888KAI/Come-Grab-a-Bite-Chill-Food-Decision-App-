@@ -132,10 +132,13 @@ function preferenceText(richness: number) {
 }
 
 function getGoogleMapsUrl(query: string, placeId?: string) {
+  const encodedQuery = encodeURIComponent(query);
   if (placeId) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&query_place_id=${placeId}`;
+    // 使用 query_place_id 可以精確定位到特定店家
+    return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}&query_place_id=${placeId}`;
   }
-  return `https://www.google.com/maps/search/${encodeURIComponent(query)}`;
+  // 一般搜尋
+  return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
 function buildMapsQuery(tags: string[]) {
