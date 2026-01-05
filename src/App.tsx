@@ -8,12 +8,10 @@ const LS_KEY = "whatnow_energy_log_v1";
 // ==========================================
 
 // 1. Google Places 後端網址 (Vercel)
-// 上線後請填入 "https://您的專案名.vercel.app/api/places"
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 
 // 2. Gemini AI 後端網址 (Vercel)
-// 上線後請填入 "https://您的專案名.vercel.app/api/gemini"
-const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
+const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decisio.vercel.app/api/gemini";
 
 // ==========================================
 
