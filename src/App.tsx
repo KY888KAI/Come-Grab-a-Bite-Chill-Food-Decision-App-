@@ -11,7 +11,7 @@ const LS_KEY = "whatnow_energy_log_v1";
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 
 // 2. Gemini AI 後端網址 (Vercel)
-const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decisio.vercel.app/api/gemini";
+const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
 
 // ==========================================
 
@@ -453,8 +453,8 @@ function ProgressDots({ step, total }: { step: number; total: number }) {
 
 export default function App() {
   const { log, setLog } = useLocalStorageLog();
-  const lastSig = log.length > 0 ? log[0].sig : null;
-
+  // 移除未使用的 lastSig 變數
+  
   const [screen, setScreen] = useState<Screen>("home");
   const [chooseStep, setChooseStep] = useState(0);
   const totalChooseSteps = 3;
