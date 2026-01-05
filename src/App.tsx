@@ -7,14 +7,14 @@ const LS_KEY = "whatnow_energy_log_v1";
 // 🚀 正式環境設定區 (Production Config)
 // ==========================================
 
-// 1. Gemini API Key (AI 靈感大廚功能)
-// 建議上線時透過後端轉發以保護金鑰，但若為純前端測試可先填於此
-const GEMINI_API_KEY = ""; 
+// 1. Google Places 後端網址 (Vercel)
+// 上線後請填入 "https://您的專案名.vercel.app/api/places"
+// 本地開發請填 "http://localhost:3000/api/places"
+const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decisio.vercel.app/places"; 
 
-// 2. 後端轉接站網址 (Vercel Serverless Function)
-// 請填入您部署在 Vercel 的完整網址
-// 例如: "https://grab-a-bite.vercel.app/api/places"
-const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decisio.vercel.app/api/places"; 
+// 2. Gemini AI 後端網址 (Vercel)
+// 上線後請填入 "https://您的專案名.vercel.app/api/gemini"
+const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decisio.vercel.app/gemini";
 
 // ==========================================
 
@@ -504,7 +504,7 @@ export default function App() {
     // 當進入推薦頁面，且有位置時，呼叫後端 API
     if (screen === "recommend" && userLocation) {
       if (!BACKEND_API_URL) {
-        // 如果沒有設定後端網址，就不會嘗試 fetch，避免錯誤
+        // 如果沒有設定後端網址，就不會嘗試 fetch
         return;
       }
 
@@ -552,9 +552,11 @@ export default function App() {
     }
   }, [screen, userLocation, mapsQuery, temp, form, richness, speed]);
 
-  // filteredPlaces: 
-  // 這裡只依賴 realPlaces，因為我們已經移除了 mockPlaces
+  // filteredPlaces: 純依賴真實資料
   const filteredPlaces = useMemo(() => {
+    // 如果沒有後端網址，就回傳空陣列（不顯示任何卡片，只顯示提示）
+    if (!BACKEND_API_URL || realPlaces.length === 0) return [];
+
     const scored = realPlaces.map(p => {
       let score = 0;
       if (p.type === temp) score += 4; 
@@ -565,9 +567,7 @@ export default function App() {
     });
 
     scored.sort((a, b) => b.score - a.score);
-    // 只過濾掉分數過低的
     const filtered = scored.filter(s => s.score >= 3); 
-    // 確保數量
     const finalCandidates = filtered.length >= 6 ? filtered : scored.slice(0, 6);
 
     return finalCandidates.slice(0, 10).map(s => s.place);
@@ -692,10 +692,11 @@ export default function App() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  // --- Gemini API 呼叫 ---
+  // --- Gemini API 呼叫 (透過後端) ---
   async function callGeminiRecommendation() {
-    if (!GEMINI_API_KEY) {
-      alert("請先填入 Gemini API Key 才能使用 AI 功能！");
+    // 這裡我們改用 BACKEND_GEMINI_URL
+    if (!BACKEND_GEMINI_URL) {
+      alert("請先設定後端 Gemini API 網址以啟用 AI 功能！");
       return;
     }
     setIsAiLoading(true);
@@ -706,22 +707,24 @@ export default function App() {
     不要包含 Markdown 標記。`;
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`, {
+      const response = await fetch(BACKEND_GEMINI_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        body: JSON.stringify({ prompt: prompt })
       });
       
       const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
       
-      if (text) {
-        const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        const json = JSON.parse(cleanText);
-        setAiSuggestion(json);
+      if (data.dish) {
+         setAiSuggestion(data);
+      } else if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+         // Fallback
+         const text = data.candidates[0].content.parts[0].text;
+         const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+         setAiSuggestion(JSON.parse(cleanText));
       }
     } catch (error) {
-      console.error("Gemini API Error:", error);
+      console.error("AI Error:", error);
       alert("AI 腦力激盪中斷了，請再試一次");
     } finally {
       setIsAiLoading(false);
@@ -1044,9 +1047,9 @@ export default function App() {
                     )}
 
                     {/* 真實資料列表 */}
-                    {realPlaces.length > 0 && (
+                    {filteredPlaces.length > 0 && (
                       <>
-                        {realPlaces.map((p) => (
+                        {filteredPlaces.map((p) => (
                           <motion.button
                             key={p.id}
                             whileTap={{ scale: 0.99 }}
