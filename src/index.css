@@ -1,1 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* 設定全域字型與背景，讓捲動體驗更好 */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  
+  /* 防止 iOS 點擊高亮 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #FAF9F6; /* 與你的 warm.bg 一致，避免載入時閃爍 */
+}
