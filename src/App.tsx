@@ -9,12 +9,11 @@ const LS_KEY = "whatnow_energy_log_v1";
 
 // 1. Google Places 後端網址 (Vercel)
 // 上線後請填入 "https://您的專案名.vercel.app/api/places"
-// 本地開發請填 "http://localhost:3000/api/places"
-const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decisio.vercel.app/places"; 
+const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 
 // 2. Gemini AI 後端網址 (Vercel)
 // 上線後請填入 "https://您的專案名.vercel.app/api/gemini"
-const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decisio.vercel.app/gemini";
+const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
 
 // ==========================================
 
@@ -131,6 +130,7 @@ function preferenceText(richness: number) {
   return "都可以";
 }
 
+// ✅ 修正後的 Google Maps URL 生成函數
 function getGoogleMapsUrl(query: string, placeId?: string) {
   const encodedQuery = encodeURIComponent(query);
   if (placeId) {
@@ -802,10 +802,10 @@ export default function App() {
                   {log.length > 0 && log[0] && (
                     <div className="mt-1 flex justify-center">
                       <motion.button
-                         whileTap={{ scale: 0.98 }}
-                         onClick={() => handleReEat(log[0])}
-                         className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm transition-colors hover:bg-black/5"
-                         style={{ color: warm.sub }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handleReEat(log[0])}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm transition-colors hover:bg-black/5"
+                          style={{ color: warm.sub }}
                       >
                         <span className="font-medium opacity-80">
                           上次：{(log[0].choiceText || "").replace("搜尋：", "")}
@@ -1093,15 +1093,15 @@ export default function App() {
                     {/* ✨ AI 靈感按鈕 */}
                     <div className="pt-2 pb-2">
                       <motion.button
-                         whileTap={{ scale: 0.98 }}
-                         onClick={callGeminiRecommendation}
-                         disabled={isAiLoading}
-                         className="w-full rounded-2xl p-4 text-center relative overflow-hidden"
-                         style={{
-                           background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)",
-                           border: "1px dashed rgba(255,159,94,0.4)",
-                           color: warm.text
-                         }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={callGeminiRecommendation}
+                          disabled={isAiLoading}
+                          className="w-full rounded-2xl p-4 text-center relative overflow-hidden"
+                          style={{
+                            background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)",
+                            border: "1px dashed rgba(255,159,94,0.4)",
+                            color: warm.text
+                          }}
                       >
                         {isAiLoading ? (
                           <div className="flex items-center justify-center gap-2">
@@ -1152,14 +1152,14 @@ export default function App() {
 
                     {/* 廣泛搜尋分類 */}
                     <motion.button
-                       whileTap={{ scale: 0.98 }}
-                       onClick={handleSearchCategory}
-                       className="w-full rounded-2xl p-4 text-center mb-4 mt-2"
-                       style={{
-                         background: "rgba(255,255,255,0.5)",
-                         border: "1px solid rgba(0,0,0,0.05)",
-                         color: warm.text
-                       }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleSearchCategory}
+                        className="w-full rounded-2xl p-4 text-center mb-4 mt-2"
+                        style={{
+                          background: "rgba(255,255,255,0.5)",
+                          border: "1px solid rgba(0,0,0,0.05)",
+                          color: warm.text
+                        }}
                     >
                       <div className="text-sm opacity-60">
                         還是沒看到想吃的？
