@@ -8,6 +8,7 @@ const LS_KEY = "whatnow_energy_log_v1";
 // ==========================================
 
 // 1. Google Places 後端網址 (Vercel)
+// ⚠️ 請確認您的 Vercel 專案網址真的是這個。如果您的專案名稱後面有加亂碼或使用者名稱，請務必修正這裡！
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 
 // 2. Gemini AI 後端網址 (Vercel)
@@ -523,8 +524,12 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       })
-      .then(res => {
-        if (!res.ok) throw new Error("API response not ok");
+      .then(async res => {
+        // 修正：檢查回應狀態，如果出錯，讀取錯誤訊息並顯示出來
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`${res.status} ${errorText}`);
+        }
         return res.json();
       })
       .then(data => {
@@ -547,7 +552,8 @@ export default function App() {
       })
       .catch(err => {
         console.error("API Error:", err);
-        setApiError("無法連接到餐廳資料庫");
+        // 修正：將詳細錯誤訊息顯示在畫面上，方便除錯
+        setApiError(`無法連接到餐廳資料庫：${err.message}`);
       })
       .finally(() => setIsRealLoading(false));
     }
