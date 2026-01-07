@@ -20,6 +20,7 @@ type Form = "soup" | "dry";
 type Speed = "fast" | "sit";
 type Style = "light" | "rich";
 
+// 移除 "state" 頁面，精簡流程
 type Screen = "home" | "choose" | "recommend" | "energy" | "log";
 
 type Place = {
@@ -140,7 +141,7 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
 
 // 🌍 自然語言關鍵字生成器
 function buildMapsQuery(tags: string[]) {
-  // const hasHot = tags.includes("熱食"); // Removed unused variable
+  // 移除未使用的 hasHot 變數
   const hasCold = tags.includes("冷食");
   const hasSoup = tags.includes("湯的");
   const hasDry = tags.includes("乾的");
@@ -812,7 +813,7 @@ export default function App() {
     boxShadow: "0 16px 50px rgba(20,20,20,0.07)",
   } as const;
 
-  const showBack = screen !== "home" && screen !== "state";
+  const showBack = screen !== "home"; // "state" is gone
 
   return (
     <div className="min-h-screen w-full flex items-start justify-center px-3" style={{ background: warm.bg, color: warm.text }}>
@@ -1026,59 +1027,7 @@ export default function App() {
                 </motion.div>
               )}
 
-              {screen === "state" && (
-                <motion.div
-                  key="state"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.22 }}
-                  className="p-6"
-                >
-                  <div className="text-xl" style={{ fontWeight: 800, letterSpacing: -0.2, textAlign: "center" }}>
-                    你現在想吃的是——
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-2 justify-center">
-                    {tags.map((t) => (
-                      <Tag key={t}>{t}</Tag>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 flex items-center justify-center">
-                    <EnergyCore 
-                      mode={pressing ? "chaos" : "stable"} 
-                      temp={temp} 
-                      richness={richness}
-                      size={220} 
-                    />
-                  </div>
-
-                  <div className="mt-6 space-y-3">
-                    <PrimaryButton onClick={() => setScreen("recommend")}>看看附近可以吃什麼</PrimaryButton>
-                    <PrimaryButton
-                      subtle
-                      onClick={() => {
-                        setChooseStep(0);
-                        setScreen("choose");
-                      }}
-                    >
-                      重想一次
-                    </PrimaryButton>
-                    <PrimaryButton
-                      subtle
-                      onLongPress={() => {
-                        setPressing(true);
-                        randomizeAll();
-                        setPressing(false);
-                        setScreen("state");
-                      }}
-                    >
-                      沒想法（長按隨機）
-                    </PrimaryButton>
-                  </div>
-                </motion.div>
-              )}
+              {/* State screen is REMOVED */}
 
               {screen === "recommend" && (
                 <motion.div
