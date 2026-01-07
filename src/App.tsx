@@ -141,7 +141,6 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
 
 // 🌍 自然語言關鍵字生成器
 function buildMapsQuery(tags: string[]) {
-  // 移除未使用的 hasHot 變數
   const hasCold = tags.includes("冷食");
   const hasSoup = tags.includes("湯的");
   const hasDry = tags.includes("乾的");
@@ -485,7 +484,6 @@ function ProgressDots({ step, total }: { step: number; total: number }) {
 
 export default function App() {
   const { log, setLog } = useLocalStorageLog();
-  // 移除未使用的 lastSig 變數
   
   const [screen, setScreen] = useState<Screen>("home");
   const [chooseStep, setChooseStep] = useState(0);
@@ -502,7 +500,6 @@ export default function App() {
   // Gemini AI 狀態
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  // 移除 aiKeyword 狀態，避免列表因 AI 建議而變動
 
   // 真實資料狀態
   const [realPlaces, setRealPlaces] = useState<Place[]>([]);
@@ -510,15 +507,12 @@ export default function App() {
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // 變數計算 (derived, tags, style...)
   const derived = useMemo(() => computeTags({ temp, form, richness, speed }), [temp, form, richness, speed]);
   const tags = derived.tags;
   const style = derived.style;
   
-  // 搜尋關鍵字：只使用穩定、自然語言生成的 basicQuery
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
 
-  // 1. 初始化時嘗試抓取位置
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -535,15 +529,9 @@ export default function App() {
     }
   }, []);
 
-  // 已移除背景自動呼叫 AI 的邏輯，確保穩定性
-
-  // 2. 資料抓取函式：呼叫 Vercel Backend
   useEffect(() => {
-    // 當進入推薦頁面，且有位置時，呼叫後端 API
     if (screen === "recommend" && userLocation) {
-      if (!BACKEND_API_URL) {
-        return;
-      }
+      if (!BACKEND_API_URL) return;
 
       setIsRealLoading(true);
       setApiError(null);
@@ -568,7 +556,6 @@ export default function App() {
       })
       .then(data => {
         if (Array.isArray(data)) {
-          // 計算每個結果的距離
           const placesWithDist = data.map((p: any) => {
              const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat, p.lng);
              return {
@@ -592,12 +579,9 @@ export default function App() {
     }
   }, [screen, userLocation, mapsQuery, temp, form, richness, speed]);
 
-  // filteredPlaces: 純依賴真實資料
   const filteredPlaces = useMemo(() => {
-    // 如果沒有後端網址，就回傳空陣列（不顯示任何卡片，只顯示提示）
     if (!BACKEND_API_URL || realPlaces.length === 0) return [];
 
-    // 1. 先計算分數（符合心理測驗的程度）
     const scored = realPlaces.map(p => {
       let score = 0;
       if (p.type === temp) score += 4; 
@@ -607,23 +591,15 @@ export default function App() {
       return { place: p, score: score };
     });
 
-    // 2. 篩選：只保留有一定相關性的餐廳（避免推薦完全不相關的）
-    // 分數門檻可以設低一點，確保有東西可以選
     const candidates = scored.filter(s => s.score >= 2); 
-    
-    // 如果符合的太少，就放寬標準，取所有結果
     const finalPool = candidates.length > 0 ? candidates : scored;
 
-    // 3. 排序：強制依照距離由近到遠排序 (distanceVal ASC)
-    // 這裡使用 sort，a.distanceVal - b.distanceVal
     finalPool.sort((a, b) => {
        const distA = a.place.distanceVal ?? 9999;
        const distB = b.place.distanceVal ?? 9999;
        return distA - distB;
     });
 
-    // 4. 限制數量：只取最近的 6 個 (至少5個)
-    // 使用 slice(0, 6)
     return finalPool.slice(0, 6).map(s => s.place);
   }, [temp, form, speed, style, realPlaces]);
 
@@ -635,7 +611,6 @@ export default function App() {
     setSpeed(null);
     setPressing(false);
     setAiSuggestion(null);
-    // setAiKeyword(null); // 已移除
     setRealPlaces([]); 
     setApiError(null);
     if (pressTimer.current) {
@@ -655,7 +630,6 @@ export default function App() {
       setChooseStep((s) => s - 1);
       return;
     }
-    // "State" 頁面已移除，直接返回 "choose" 流程，方便使用者微調
     if (screen === "recommend") return setScreen("choose"); 
     if (screen === "energy") return setScreen("recommend");
     if (screen === "log") return goHome();
@@ -671,7 +645,6 @@ export default function App() {
     if (chooseStep < totalChooseSteps - 1) {
       setChooseStep((s) => s + 1);
     } else {
-      // 流程改變：選完最後一步直接進結果頁
       setScreen("recommend"); 
     }
   }
@@ -694,7 +667,6 @@ export default function App() {
       randomizeAll();
       setPressing(false);
       pressTimer.current = null;
-      // 流程改變：長按隨機後直接進結果頁
       setScreen("recommend");
     }, 650);
   }
@@ -726,31 +698,42 @@ export default function App() {
     setLog((prev) => [entry, ...prev]);
   }
 
+  // 🔥 修正 1：加上 setTimeout 解決白畫面問題
   function handleGoEat(place: Place | string) {
     const name = typeof place === 'string' ? place : place.name;
-    // 如果有 googlePlaceId，用它來精確導航；否則用店名
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     
     saveEnergy(name, false); 
-    const url = getGoogleMapsUrl(name, placeId); 
-    window.open(url, "_blank", "noopener,noreferrer");
-    setScreen("energy");
+    setScreen("energy"); // 先切換畫面
+
+    setTimeout(() => {
+      const url = getGoogleMapsUrl(name, placeId); 
+      window.open(url, "_blank", "noopener,noreferrer");
+    }, 300); // 延遲開啟
   }
 
+  // 🔥 修正 1：加上 setTimeout 解決白畫面問題
   function handleSearchCategory() {
     saveEnergy(`搜尋：${mapsQuery}`, true); 
-    const url = getGoogleMapsUrl(mapsQuery);
-    window.open(url, "_blank", "noopener,noreferrer");
-    setScreen("energy");
+    setScreen("energy"); // 先切換畫面
+
+    setTimeout(() => {
+      const url = getGoogleMapsUrl(mapsQuery);
+      window.open(url, "_blank", "noopener,noreferrer");
+    }, 300);
   }
 
+  // 🔥 修正 1：加上 setTimeout 解決白畫面問題
   function handleReEat(entry: LogEntry) {
     let query = entry.choiceText || ""; 
     if (query.startsWith("搜尋：")) {
       query = query.replace("搜尋：", "");
     }
-    const url = getGoogleMapsUrl(query);
-    window.open(url, "_blank", "noopener,noreferrer");
+    // Log 頁面不需要切換 screen，但為了保險也加延遲
+    setTimeout(() => {
+      const url = getGoogleMapsUrl(query);
+      window.open(url, "_blank", "noopener,noreferrer");
+    }, 300);
   }
 
   // --- 手動呼叫 AI 大廚 (Explicit AI Chef) ---
@@ -777,15 +760,11 @@ export default function App() {
       
       if (data.dish) {
          setAiSuggestion(data);
-         // 修正：不再同步更新搜尋關鍵字，避免列表跳動
-         // setAiKeyword(data.dish); 
       } else if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-         // Fallback
          const text = data.candidates[0].content.parts[0].text;
          const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
          const parsed = JSON.parse(cleanText);
          setAiSuggestion(parsed);
-         // setAiKeyword(parsed.dish); // 修正
       }
     } catch (error) {
       console.error("AI Error:", error);
@@ -800,7 +779,7 @@ export default function App() {
       ? "Come Grab a Bite"
       : screen === "choose"
         ? "做個輕鬆的選擇"
-        : screen === "recommend" // Removed state title
+        : screen === "recommend" 
           ? "附近可以吃什麼"
           : screen === "energy"
             ? "留下這次的食力"
@@ -813,7 +792,7 @@ export default function App() {
     boxShadow: "0 16px 50px rgba(20,20,20,0.07)",
   } as const;
 
-  const showBack = screen !== "home"; // "state" is gone
+  const showBack = screen !== "home"; 
 
   return (
     <div className="min-h-screen w-full flex items-start justify-center px-3" style={{ background: warm.bg, color: warm.text }}>
@@ -1295,7 +1274,8 @@ export default function App() {
                         log.map((e, idx) => (
                           <motion.button
                             key={e.id}
-                            className="w-full rounded-3xl p-4 text-left transition flex items-center gap-5"
+                            // 🔥 修正 2：優化卡片樣式
+                            className="w-full rounded-3xl p-3.5 text-left transition flex items-center gap-4"
                             style={{
                               border: "1px solid rgba(30,31,36,0.10)",
                               background: "rgba(255,255,255,0.72)",
@@ -1307,13 +1287,13 @@ export default function App() {
                             whileTap={{ scale: 0.98 }}
                             onClick={() => handleReEat(e)}
                           >
-                            {/* 左側：加大能量球 */}
-                            <div className="shrink-0 flex items-center justify-center" style={{ width: 100, height: 100 }}>
+                            {/* 左側：縮小能量球，讓出空間 */}
+                            <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
                               <EnergyCore
                                 mode={e.sig?.mode ?? "satisfied"}
                                 temp={e.sig?.temp}
                                 richness={e.sig?.richness ?? 0.5}
-                                size={100} // 加大尺寸
+                                size={88} 
                               />
                             </div>
 
@@ -1326,6 +1306,7 @@ export default function App() {
                                   className="text-lg font-bold mb-2 leading-tight" 
                                   style={{ 
                                     color: warm.text,
+                                    // 確保文字可以換行，不會被球擠扁
                                     display: "-webkit-box",
                                     WebkitLineClamp: 2,
                                     WebkitBoxOrient: "vertical",
