@@ -4,13 +4,10 @@ import { AnimatePresence, motion } from "framer-motion";
 const LS_KEY = "whatnow_energy_log_v1";
 
 // ==========================================
-// 🚀 正式環境設定區 (Production Config)
+// 🚀 正式環境設定區
 // ==========================================
 
-// 1. Google Places 後端網址 (Vercel)
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
-
-// 2. Gemini AI 後端網址 (Vercel)
 const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
 
 // ==========================================
@@ -60,6 +57,7 @@ type LogEntry = {
 type AiSuggestion = {
   dish: string;
   reason: string;
+  targetPlace?: Place;
 } | null;
 
 const warm = {
@@ -127,8 +125,13 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
-// 🌍 自然語言關鍵字生成器 (主要邏輯)
+// 🌍 智慧情境關鍵字生成器
 function buildMapsQuery(tags: string[]) {
+  const hour = new Date().getHours();
+  const isMorning = hour >= 5 && hour < 11;
+  const isAfternoon = hour >= 14 && hour < 17;
+  const isLateNight = hour >= 21 || hour < 5;
+
   const hasCold = tags.includes("冷食");
   const hasSoup = tags.includes("湯的");
   const hasDry = tags.includes("乾的");
@@ -139,22 +142,39 @@ function buildMapsQuery(tags: string[]) {
 
   const prefixes = ["人氣", "在地", "必吃", "評價高", "隱藏版", "老字號", "平價", "排隊", "道地", "TOP"];
   const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+
   let categories: string[] = [];
 
+  // 時段優先
+  if (isMorning) {
+    categories.push("早餐", "早午餐", "飯糰", "三明治", "蛋餅", "粥");
+    if (hasSoup) categories.push("鹹粥", "米粉湯");
+  } else if (isAfternoon) {
+    categories.push("下午茶", "點心", "咖啡廳", "甜點", "雞蛋糕", "鬆餅");
+  } else if (isLateNight) {
+    categories.push("宵夜", "清粥小菜", "永和豆漿", "鹽酥雞", "串燒", "居酒屋", "深夜食堂");
+  }
+
+  // 屬性邏輯
   if (hasRich) {
     categories.push("美式漢堡", "韓式料理", "泰式料理", "燒肉", "咖哩", "麻辣鍋", "熱炒", "川菜");
-    if (hasSoup) categories.push("拉麵", "牛肉麵", "火鍋", "燉湯");
-    if (hasDry) categories.push("丼飯", "炸雞", "鐵板燒", "燒臘");
+    if (hasSoup) categories.push("拉麵", "牛肉麵", "火鍋", "燉湯", "壽喜燒");
+    if (hasDry) categories.push("丼飯", "炸雞", "鐵板燒", "燒臘", "滷肉飯");
   } 
   if (hasLight) {
-    categories.push("日式定食", "越南料理", "早午餐", "海鮮", "素食");
-    if (hasSoup) categories.push("烏龍麵", "魚湯", "粥", "關東煮");
-    if (hasDry) categories.push("壽司", "輕食", "健康餐盒", "蕎麥麵");
+    categories.push("日式定食", "越南料理", "早午餐", "海鮮", "素食", "健康餐盒");
+    if (hasSoup) categories.push("烏龍麵", "魚湯", "粥", "關東煮", "茶泡飯");
+    if (hasDry) categories.push("壽司", "輕食", "蕎麥麵", "涼麵");
   }
-  if (hasCold) categories = ["壽司", "沙拉", "涼麵", "波奇碗", "生魚片", "冷滷味"]; 
-  if (hasFast) categories.push("便當", "小吃", "速食", "飯糰", "三明治", "麵線");
-  if (hasSit) categories.push("餐廳", "居酒屋", "餐酒館", "牛排", "義大利麵");
-  if (categories.length === 0) categories = ["美食", "餐廳", "小吃", "早午餐", "下午茶"];
+  if (hasCold) {
+    categories = ["壽司", "沙拉", "涼麵", "波奇碗", "生魚片", "冷滷味", "泰式涼拌"]; 
+  }
+
+  // 補強
+  if (hasFast) categories.push("便當", "小吃", "速食", "麵線", "水煎包");
+  if (hasSit) categories.push("餐廳", "居酒屋", "餐酒館", "牛排", "義大利麵", "合菜");
+
+  if (categories.length === 0) categories = ["美食", "餐廳", "小吃", "早午餐"];
 
   const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
   return Math.random() > 0.3 ? `${randomPrefix} ${selectedCategory}` : selectedCategory;
@@ -177,6 +197,7 @@ function useLocalStorageLog() {
   return { log, setLog } as const;
 }
 
+// --- UI Components ---
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center rounded-full px-3 py-1 text-sm" style={{ background: "rgba(255, 211, 106, 0.22)", color: warm.text, border: "1px solid rgba(255, 138, 61, 0.18)" }}>
@@ -298,47 +319,10 @@ export default function App() {
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   
-  // 🔥 改動 1：不預設為 null，而是直接使用 buildMapsQuery 的結果
-  // 這樣進入頁面時，activeQuery 已經有值，不會顯示 "AI 思考中..."
   const derived = useMemo(() => computeTags({ temp, form, richness, speed }), [temp, form, richness, speed]);
   const tags = derived.tags;
   const style = derived.style;
-  const initialQuery = useMemo(() => buildMapsQuery(tags), [tags]);
-  const [activeQuery, setActiveQuery] = useState<string>(initialQuery);
-
-  useEffect(() => {
-    // 當 tags 改變時 (例如重選)，更新 activeQuery
-    // 這確保每次進入 recommend 都是新的隨機詞
-    if (screen === 'recommend') {
-        const q = buildMapsQuery(tags);
-        setActiveQuery(q);
-        
-        // 🚀 背景 AI 優化 (Silent Upgrade)
-        // 這裡我們偷偷問 AI 有沒有更好的詞，如果有，就更新 activeQuery
-        // 但因為我們已經有 initialQuery，所以介面不會轉圈圈
-        if (BACKEND_GEMINI_URL) {
-            const prompt = `使用者想吃：${tags.join(', ')}。
-            請發揮創意，推薦一個「非固定菜單」的搜尋關鍵字，可以是形容詞組合（如：巷弄隱藏美食）或是具體但有特色的餐點（如：現煮鮮魚湯），目的是在 Google Maps 上找到好吃的東西。
-            只要回傳一個關鍵字即可，不要標點符號。`;
-
-            fetch(BACKEND_GEMINI_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt: prompt })
-            })
-            .then(res => res.json())
-            .then(data => {
-                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (text) {
-                    const cleanText = text.trim().replace(/\n/g, "").replace(/。/g, "");
-                    // console.log("Silent AI updated query:", cleanText);
-                    setActiveQuery(cleanText); // 只有當 AI 回傳成功時才更新
-                }
-            })
-            .catch(() => {}); // 失敗就算了，反正我們有 buildMapsQuery 擋著
-        }
-    }
-  }, [screen, tags]);
+  const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -350,12 +334,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (screen === "recommend" && userLocation && activeQuery) {
+    if (screen === "recommend" && userLocation) {
       if (!BACKEND_API_URL) return;
       setIsRealLoading(true);
       setApiError(null);
       
-      const payload = { lat: userLocation.lat, lng: userLocation.lng, query: activeQuery };
+      const payload = { lat: userLocation.lat, lng: userLocation.lng, query: mapsQuery };
       fetch(BACKEND_API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
       .then(async res => {
         if (!res.ok) throw new Error(await res.text());
@@ -373,7 +357,7 @@ export default function App() {
       .catch(err => setApiError(`API Error: ${err.message}`))
       .finally(() => setIsRealLoading(false));
     }
-  }, [screen, userLocation, activeQuery, temp, form, richness, speed]);
+  }, [screen, userLocation, mapsQuery, temp, form, richness, speed]);
 
   const filteredPlaces = useMemo(() => {
     if (!BACKEND_API_URL || realPlaces.length === 0) return [];
@@ -441,33 +425,40 @@ export default function App() {
     setLog((prev) => [entry, ...prev]);
   }
 
-  // 🔥 關鍵修復 2：先開連結，再更新狀態 (Fix White Screen)
+  // 🔥 關鍵修正 1：使用 visibilitychange 徹底解決白屏
   function handleGoEat(place: Place | string) {
     const name = typeof place === 'string' ? place : place.name;
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     
     saveEnergy(name, false); 
     
-    // 1. 立即打開網址，確保瀏覽器不阻擋
+    // 1. 直接開啟地圖
     const url = getGoogleMapsUrl(name, placeId); 
     window.open(url, "_blank", "noopener,noreferrer");
 
-    // 2. 延遲更新狀態，避免動畫凍結導致白屏
-    setTimeout(() => {
-        setScreen("energy"); 
-    }, 500); 
+    // 2. 監聽「使用者回到 App」的那一瞬間，再進行頁面切換
+    // 這樣保證頁面切換發生在 App 是 Active 的時候，不會造成渲染引擎凍結
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setScreen("energy");
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
   }
 
   function handleSearchCategory() {
-    const query = activeQuery || "美食";
-    saveEnergy(`搜尋：${query}`, true); 
-    
-    const url = getGoogleMapsUrl(query);
+    saveEnergy(`搜尋：${mapsQuery}`, true); 
+    const url = getGoogleMapsUrl(mapsQuery);
     window.open(url, "_blank", "noopener,noreferrer");
-
-    setTimeout(() => {
-        setScreen("energy"); 
-    }, 500);
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setScreen("energy");
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
   }
 
   function handleReEat(entry: LogEntry) {
@@ -476,15 +467,36 @@ export default function App() {
     
     const url = getGoogleMapsUrl(query);
     window.open(url, "_blank", "noopener,noreferrer");
+    
+    // Log 頁面不需要切換 screen，所以不用監聽
   }
 
+  // 🔥 AI 大廚邏輯升級：強制推薦真實店家
   async function callGeminiChef() {
     if (!BACKEND_GEMINI_URL) return alert("請先設定後端 Gemini API 網址！");
     setIsAiLoading(true);
-    const prompt = `你是一個台灣美食專家。使用者現在想吃：${tags.join(', ')}。
-    請推薦一道具體且適合的台灣常見餐點（例如：牛肉麵、滷肉飯、火鍋...）。
-    請回傳 JSON 格式：{ "dish": "餐點名稱", "reason": "一句話推薦理由（繁體中文，輕鬆語氣）" }
-    不要包含 Markdown 標記。`;
+
+    // 1. 從我們已經抓到的 "真實店家列表" 中挑選
+    let targetPlace: Place | null = null;
+    
+    if (filteredPlaces.length > 0) {
+        // 挑選一個推薦的 (隨機)
+        targetPlace = filteredPlaces[Math.floor(Math.random() * Math.min(3, filteredPlaces.length))];
+    }
+
+    // 2. 構建 Prompt
+    let prompt = "";
+    if (targetPlace) {
+        prompt = `使用者想吃：${tags.join(', ')}。
+        我已經在附近找到一家店叫「${targetPlace.name}」。
+        請用繁體中文，給出一個「推薦這家店」的理由，語氣要像在地老饕，稍微浮誇一點點沒關係。
+        格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
+    } else {
+        // 如果沒有店家資料 (極端狀況)，還是退回推薦菜色
+        prompt = `使用者想吃：${tags.join(', ')}。
+        請推薦一道具體且適合的台灣常見餐點。
+        回傳 JSON 格式：{ "dish": "餐點名稱", "reason": "一句話推薦理由" }`;
+    }
 
     try {
       const response = await fetch(BACKEND_GEMINI_URL, {
@@ -493,13 +505,23 @@ export default function App() {
         body: JSON.stringify({ prompt: prompt })
       });
       const data = await response.json();
+      
+      let suggestion = null;
       if (data.dish) {
-         setAiSuggestion(data);
+         suggestion = data;
       } else if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
          const text = data.candidates[0].content.parts[0].text;
          const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-         setAiSuggestion(JSON.parse(cleanText));
+         suggestion = JSON.parse(cleanText);
       }
+
+      if (suggestion) {
+          if (targetPlace) {
+              suggestion.targetPlace = targetPlace;
+          }
+          setAiSuggestion(suggestion);
+      }
+
     } catch (error) {
       console.error("AI Error:", error);
       alert("AI 腦力激盪中斷了，請再試一次");
@@ -596,13 +618,9 @@ export default function App() {
                   </div>
                   <div className="text-xl" style={{ fontWeight: 800, letterSpacing: -0.2, textAlign: "center" }}>附近可以吃什麼</div>
                   <div className="mt-5 space-y-3">
-                    {!BACKEND_API_URL && (
-                      <div className="p-4 text-center rounded-2xl bg-orange-50 border border-orange-200">
-                        <div className="text-sm font-bold text-orange-800">⚠️ 請設定後端網址</div>
-                      </div>
-                    )}
-                    {/* 🔥 修正 2：移除 "AI 發想中" 的提示，因為現在 activeQuery 永遠有值 */}
-                    {(isRealLoading) && (
+                    {/* 移除後端網址警告 */}
+                    
+                    {isRealLoading && (
                       <div className="py-8 text-center text-gray-400 animate-pulse">
                          正在搜尋附近的美味...
                       </div>
@@ -638,12 +656,12 @@ export default function App() {
                         <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500">✨ AI 專屬推薦</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
                         <div className="text-lg font-black mb-1">{aiSuggestion.dish}</div>
                         <div className="text-sm opacity-70 mb-4 leading-relaxed">{aiSuggestion.reason}</div>
-                        <PrimaryButton onClick={() => handleGoEat(aiSuggestion.dish)}>出發去吃！ →</PrimaryButton>
+                        <PrimaryButton onClick={() => handleGoEat(aiSuggestion.targetPlace || aiSuggestion.dish)}>出發去吃！ →</PrimaryButton>
                       </motion.div>
                     )}
                     <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.5)", border: "1px solid rgba(0,0,0,0.05)", color: warm.text }}>
                       <div className="text-sm opacity-60">還是沒看到想吃的？</div>
-                      <div className="text-sm opacity-100"><span className="underline font-bold">在地圖搜尋「{activeQuery || "..."}」</span></div>
+                      <div className="text-sm opacity-100"><span className="underline font-bold">在地圖搜尋「{mapsQuery}」</span></div>
                     </motion.button>
                   </div>
                 </motion.div>
@@ -676,10 +694,10 @@ export default function App() {
                             <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
                               <EnergyCore mode={e.sig?.mode ?? "satisfied"} temp={e.sig?.temp} richness={e.sig?.richness ?? 0.5} size={88} />
                             </div>
+                            {/* 🔥 修正 2：卡片內容自動長高，完整顯示所有文字 */}
                             <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1">
                                 <div className="text-xs mb-1 font-medium" style={{ color: warm.sub }}>{fmtDate(e.at)}</div>
-                                {/* 🔥 修正 2：移除截斷 (truncate / line-clamp)，改為自動換行 (whitespace-normal) */}
-                                <div className="text-lg font-bold mb-2 leading-tight whitespace-normal" style={{ color: warm.text }}>{(e.choiceText || "").replace("搜尋：", "")}</div>
+                                <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text }}>{(e.choiceText || "").replace("搜尋：", "")}</div>
                                 <div className="flex flex-wrap gap-1.5">{e.tags?.slice(0, 3).map((t) => (<span key={t} className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: "rgba(255,211,106,0.18)", border: "1px solid rgba(255,138,61,0.16)", color: warm.text }}>{t}</span>))}</div>
                             </div>
                           </motion.button>
