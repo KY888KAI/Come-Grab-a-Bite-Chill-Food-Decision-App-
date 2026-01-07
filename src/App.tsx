@@ -8,7 +8,6 @@ const LS_KEY = "whatnow_energy_log_v1";
 // ==========================================
 
 // 1. Google Places 後端網址 (Vercel)
-// ⚠️ 請確認您的 Vercel 專案網址真的是這個。如果您的專案名稱後面有加亂碼或使用者名稱，請務必修正這裡！
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 
 // 2. Gemini AI 後端網址 (Vercel)
@@ -21,7 +20,7 @@ type Form = "soup" | "dry";
 type Speed = "fast" | "sit";
 type Style = "light" | "rich";
 
-type Screen = "home" | "choose" | "state" | "recommend" | "energy" | "log";
+type Screen = "home" | "choose" | "recommend" | "energy" | "log";
 
 type Place = {
   id: string;
@@ -33,6 +32,7 @@ type Place = {
   price?: "budget" | "mid";
   queryKeyword?: string; 
   distance: string; 
+  distanceVal?: number;
   lat?: number;
   lng?: number;
   googlePlaceId?: string;
@@ -133,13 +133,12 @@ function preferenceText(richness: number) {
 function getGoogleMapsUrl(query: string, placeId?: string) {
   const encodedQuery = encodeURIComponent(query);
   if (placeId) {
-    // 使用 query_place_id 可以精確定位到特定店家
     return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}&query_place_id=${placeId}`;
   }
-  // 一般搜尋
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
+// 🌍 自然語言關鍵字生成器
 function buildMapsQuery(tags: string[]) {
   const hasHot = tags.includes("熱食");
   const hasCold = tags.includes("冷食");
@@ -147,15 +146,46 @@ function buildMapsQuery(tags: string[]) {
   const hasDry = tags.includes("乾的");
   const hasRich = tags.includes("重口");
   const hasLight = tags.includes("清爽");
-  const pool: string[] = [];
-  if (hasRich && hasSoup && hasHot) pool.push("麻辣鍋", "牛肉麵", "拉麵", "酸辣湯");
-  if (hasLight && hasSoup && hasHot) pool.push("清湯麵", "粥", "味噌湯", "烏龍麵");
-  if (hasRich && hasDry && hasHot) pool.push("燒肉飯", "咖哩飯", "丼飯", "炸雞");
-  if (hasLight && hasDry) pool.push("沙拉", "健康餐盒", "越南河粉", "涼麵");
-  if (hasCold) pool.push("沙拉", "涼麵", "生魚片");
-  if (pool.length === 0) pool.push("餐廳", "小吃", "便當", "麵");
-  const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-  return pick(pool);
+  const hasFast = tags.includes("快點");
+  const hasSit = tags.includes("坐下來吃");
+
+  const prefixes = [
+    "人氣", "在地", "必吃", "評價高", "隱藏版", "老字號", "平價", "排隊", "道地", "TOP"
+  ];
+  const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+
+  let categories: string[] = [];
+
+  if (hasRich) {
+    categories.push("美式漢堡", "韓式料理", "泰式料理", "燒肉", "咖哩", "麻辣鍋", "熱炒", "川菜");
+    if (hasSoup) categories.push("拉麵", "牛肉麵", "火鍋", "燉湯");
+    if (hasDry) categories.push("丼飯", "炸雞", "鐵板燒", "燒臘");
+  } 
+  
+  if (hasLight) {
+    categories.push("日式定食", "越南料理", "早午餐", "海鮮", "素食");
+    if (hasSoup) categories.push("烏龍麵", "魚湯", "粥", "關東煮");
+    if (hasDry) categories.push("壽司", "輕食", "健康餐盒", "蕎麥麵");
+  }
+
+  if (hasCold) {
+    categories = ["壽司", "沙拉", "涼麵", "波奇碗", "生魚片", "冷滷味"]; 
+  }
+
+  if (hasFast) {
+    categories.push("便當", "小吃", "速食", "飯糰", "三明治", "麵線");
+  }
+  if (hasSit) {
+    categories.push("餐廳", "居酒屋", "餐酒館", "牛排", "義大利麵");
+  }
+
+  if (categories.length === 0) {
+    categories = ["美食", "餐廳", "小吃", "早午餐", "下午茶"];
+  }
+
+  const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
+
+  return Math.random() > 0.3 ? `${randomPrefix} ${selectedCategory}` : selectedCategory;
 }
 
 function useLocalStorageLog() {
@@ -471,6 +501,7 @@ export default function App() {
   // Gemini AI 狀態
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  // 移除 aiKeyword 狀態，避免列表因 AI 建議而變動
 
   // 真實資料狀態
   const [realPlaces, setRealPlaces] = useState<Place[]>([]);
@@ -482,6 +513,8 @@ export default function App() {
   const derived = useMemo(() => computeTags({ temp, form, richness, speed }), [temp, form, richness, speed]);
   const tags = derived.tags;
   const style = derived.style;
+  
+  // 搜尋關鍵字：只使用穩定、自然語言生成的 basicQuery
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
 
   // 1. 初始化時嘗試抓取位置
@@ -501,12 +534,13 @@ export default function App() {
     }
   }, []);
 
+  // 已移除背景自動呼叫 AI 的邏輯，確保穩定性
+
   // 2. 資料抓取函式：呼叫 Vercel Backend
   useEffect(() => {
     // 當進入推薦頁面，且有位置時，呼叫後端 API
     if (screen === "recommend" && userLocation) {
       if (!BACKEND_API_URL) {
-        // 如果沒有設定後端網址，就不會嘗試 fetch
         return;
       }
 
@@ -516,7 +550,7 @@ export default function App() {
       const payload = {
         lat: userLocation.lat,
         lng: userLocation.lng,
-        query: mapsQuery,
+        query: mapsQuery, 
       };
 
       fetch(BACKEND_API_URL, {
@@ -525,7 +559,6 @@ export default function App() {
         body: JSON.stringify(payload)
       })
       .then(async res => {
-        // 修正：檢查回應狀態，如果出錯，讀取錯誤訊息並顯示出來
         if (!res.ok) {
           const errorText = await res.text();
           throw new Error(`${res.status} ${errorText}`);
@@ -540,7 +573,7 @@ export default function App() {
              return {
                ...p,
                distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`,
-               // 保留使用者偏好標籤，以顯示正確的資訊
+               distanceVal: d,
                type: temp,
                style: style,
                form: form,
@@ -552,7 +585,6 @@ export default function App() {
       })
       .catch(err => {
         console.error("API Error:", err);
-        // 修正：將詳細錯誤訊息顯示在畫面上，方便除錯
         setApiError(`無法連接到餐廳資料庫：${err.message}`);
       })
       .finally(() => setIsRealLoading(false));
@@ -564,20 +596,34 @@ export default function App() {
     // 如果沒有後端網址，就回傳空陣列（不顯示任何卡片，只顯示提示）
     if (!BACKEND_API_URL || realPlaces.length === 0) return [];
 
+    // 1. 先計算分數（符合心理測驗的程度）
     const scored = realPlaces.map(p => {
       let score = 0;
       if (p.type === temp) score += 4; 
       if (p.style === style) score += 3;
       if (p.form === form) score += 2;
       if (p.speed === speed) score += 1;
-      return { place: p, score: score + Math.random() * 0.5 };
+      return { place: p, score: score };
     });
 
-    scored.sort((a, b) => b.score - a.score);
-    const filtered = scored.filter(s => s.score >= 3); 
-    const finalCandidates = filtered.length >= 6 ? filtered : scored.slice(0, 6);
+    // 2. 篩選：只保留有一定相關性的餐廳（避免推薦完全不相關的）
+    // 分數門檻可以設低一點，確保有東西可以選
+    const candidates = scored.filter(s => s.score >= 2); 
+    
+    // 如果符合的太少，就放寬標準，取所有結果
+    const finalPool = candidates.length > 0 ? candidates : scored;
 
-    return finalCandidates.slice(0, 10).map(s => s.place);
+    // 3. 排序：強制依照距離由近到遠排序 (distanceVal ASC)
+    // 這裡使用 sort，a.distanceVal - b.distanceVal
+    finalPool.sort((a, b) => {
+       const distA = a.place.distanceVal ?? 9999;
+       const distB = b.place.distanceVal ?? 9999;
+       return distA - distB;
+    });
+
+    // 4. 限制數量：只取最近的 6 個 (至少5個)
+    // 使用 slice(0, 6)
+    return finalPool.slice(0, 6).map(s => s.place);
   }, [temp, form, speed, style, realPlaces]);
 
   function resetFlow() {
@@ -588,6 +634,7 @@ export default function App() {
     setSpeed(null);
     setPressing(false);
     setAiSuggestion(null);
+    // setAiKeyword(null); // 已移除
     setRealPlaces([]); 
     setApiError(null);
     if (pressTimer.current) {
@@ -607,7 +654,8 @@ export default function App() {
       setChooseStep((s) => s - 1);
       return;
     }
-    if (screen === "recommend") return setScreen("state");
+    // "State" 頁面已移除，直接返回 "choose" 流程，方便使用者微調
+    if (screen === "recommend") return setScreen("choose"); 
     if (screen === "energy") return setScreen("recommend");
     if (screen === "log") return goHome();
     return goHome();
@@ -619,8 +667,12 @@ export default function App() {
   }
 
   function nextChoose() {
-    if (chooseStep < totalChooseSteps - 1) setChooseStep((s) => s + 1);
-    else setScreen("state");
+    if (chooseStep < totalChooseSteps - 1) {
+      setChooseStep((s) => s + 1);
+    } else {
+      // 流程改變：選完最後一步直接進結果頁
+      setScreen("recommend"); 
+    }
   }
 
   function randomizeAll() {
@@ -641,7 +693,8 @@ export default function App() {
       randomizeAll();
       setPressing(false);
       pressTimer.current = null;
-      setScreen("state");
+      // 流程改變：長按隨機後直接進結果頁
+      setScreen("recommend");
     }, 650);
   }
 
@@ -699,9 +752,8 @@ export default function App() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  // --- Gemini API 呼叫 (透過後端) ---
-  async function callGeminiRecommendation() {
-    // 這裡我們改用 BACKEND_GEMINI_URL
+  // --- 手動呼叫 AI 大廚 (Explicit AI Chef) ---
+  async function callGeminiChef() {
     if (!BACKEND_GEMINI_URL) {
       alert("請先設定後端 Gemini API 網址以啟用 AI 功能！");
       return;
@@ -724,11 +776,15 @@ export default function App() {
       
       if (data.dish) {
          setAiSuggestion(data);
+         // 修正：不再同步更新搜尋關鍵字，避免列表跳動
+         // setAiKeyword(data.dish); 
       } else if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
          // Fallback
          const text = data.candidates[0].content.parts[0].text;
          const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-         setAiSuggestion(JSON.parse(cleanText));
+         const parsed = JSON.parse(cleanText);
+         setAiSuggestion(parsed);
+         // setAiKeyword(parsed.dish); // 修正
       }
     } catch (error) {
       console.error("AI Error:", error);
@@ -743,13 +799,11 @@ export default function App() {
       ? "Come Grab a Bite"
       : screen === "choose"
         ? "做個輕鬆的選擇"
-        : screen === "state"
-          ? "你的飲食狀態"
-          : screen === "recommend"
-            ? "附近可以吃什麼"
-            : screen === "energy"
-              ? "留下這次的食力"
-              : "我的食力";
+        : screen === "recommend" // Removed state title
+          ? "附近可以吃什麼"
+          : screen === "energy"
+            ? "留下這次的食力"
+            : "我的食力";
   }
 
   const card = {
@@ -767,7 +821,7 @@ export default function App() {
 
         <div className="px-4 pt-4">
           <div
-            className="rounded-[28px] overflow-hidden"
+            className="rounded-[28px] overflow-hidden relative"
             style={{
               ...card,
               background: screen === "energy" || screen === "home" ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.72)",
@@ -804,17 +858,22 @@ export default function App() {
                   </div>
 
                   {log.length > 0 && log[0] && (
-                    <div className="mt-1 flex justify-center">
+                    <div className="mt-2 flex justify-center w-full px-8">
                       <motion.button
                           whileTap={{ scale: 0.98 }}
                           onClick={() => handleReEat(log[0])}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm transition-colors hover:bg-black/5"
+                          className="group flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors hover:bg-black/5 w-full max-w-[320px]"
                           style={{ color: warm.sub }}
                       >
-                        <span className="font-medium opacity-80">
-                          上次：{(log[0].choiceText || "").replace("搜尋：", "")}
-                        </span>
-                        <span className="text-xs opacity-50">({fmtDate(log[0].at)}) ↺</span>
+                        <div className="flex items-center justify-center gap-2 text-xs opacity-60 w-full">
+                           <span>↺ 上次吃</span>
+                           <span className="opacity-50">·</span>
+                           <span>{fmtDate(log[0].at)}</span>
+                        </div>
+                        
+                        <div className="text-base leading-snug font-medium text-center w-full break-words opacity-80" style={{ color: warm.text }}>
+                          {(log[0].choiceText || "").replace("搜尋：", "")}
+                        </div>
                       </motion.button>
                     </div>
                   )}
@@ -1030,6 +1089,20 @@ export default function App() {
                   transition={{ duration: 0.22 }}
                   className="p-6"
                 >
+                  <div className="flex flex-col items-center justify-center mb-6">
+                    <EnergyCore 
+                      mode={pressing ? "chaos" : "stable"} 
+                      temp={temp} 
+                      richness={richness}
+                      size={160} 
+                    />
+                    <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                      {tags.map((t) => (
+                        <Tag key={t}>{t}</Tag>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="text-xl" style={{ fontWeight: 800, letterSpacing: -0.2, textAlign: "center" }}>
                     附近可以吃什麼
                   </div>
@@ -1069,16 +1142,19 @@ export default function App() {
                             onClick={() => handleGoEat(p)}
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-base" style={{ fontWeight: 800 }}>
+                              {/* 左側：文字區塊 */}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-base break-words" style={{ fontWeight: 800 }}>
                                   {p.name}
                                 </div>
                                 <div className="mt-1 text-sm" style={{ color: warm.sub }}>
                                   {p.distance} ・ {p.rating ? `★${p.rating}` : '無評分'}
                                 </div>
                               </div>
+                              
+                              {/* 右側：按鈕區塊 (固定大小，不會縮放) */}
                               <div
-                                className="h-9 w-9 rounded-2xl flex items-center justify-center"
+                                className="h-9 w-9 flex-shrink-0 rounded-2xl flex items-center justify-center"
                                 style={{
                                   background: "rgba(255,138,61,0.12)",
                                   border: "1px solid rgba(255,138,61,0.22)",
@@ -1094,11 +1170,11 @@ export default function App() {
                       </>
                     )}
 
-                    {/* ✨ AI 靈感按鈕 */}
+                    {/* ✨ AI 靈感按鈕 - 這裡顯示載入狀態或結果 */}
                     <div className="pt-2 pb-2">
                       <motion.button
                           whileTap={{ scale: 0.98 }}
-                          onClick={callGeminiRecommendation}
+                          onClick={callGeminiChef} // 改為呼叫手動大廚
                           disabled={isAiLoading}
                           className="w-full rounded-2xl p-4 text-center relative overflow-hidden"
                           style={{
@@ -1115,15 +1191,17 @@ export default function App() {
                         ) : (
                           <>
                             <div className="text-sm font-bold flex items-center justify-center gap-2">
-                              <span>✨</span> 不知道吃什麼？問問 AI
+                              <span>✨</span> 都不滿意？讓 AI 大廚幫你挑
                             </div>
-                            <div className="text-xs opacity-60 mt-1">根據你的偏好推薦隱藏菜單</div>
+                            <div className="text-xs opacity-60 mt-1">
+                              為你推薦一家最適合的隱藏好店
+                            </div>
                           </>
                         )}
                       </motion.button>
                     </div>
 
-                    {/* AI 推薦結果卡片 */}
+                    {/* AI 推薦結果卡片 (當有詳細理由時顯示) */}
                     {aiSuggestion && (
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
@@ -1154,11 +1232,11 @@ export default function App() {
                       </motion.div>
                     )}
 
-                    {/* 廣泛搜尋分類 */}
+                    {/* 廣泛搜尋分類 - 修正文字換行 */}
                     <motion.button
                         whileTap={{ scale: 0.98 }}
                         onClick={handleSearchCategory}
-                        className="w-full rounded-2xl p-4 text-center mb-4 mt-2"
+                        className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1"
                         style={{
                           background: "rgba(255,255,255,0.5)",
                           border: "1px solid rgba(0,0,0,0.05)",
@@ -1167,7 +1245,9 @@ export default function App() {
                     >
                       <div className="text-sm opacity-60">
                         還是沒看到想吃的？
-                        <span className="underline font-bold ml-1">在地圖搜尋「{mapsQuery}」</span>
+                      </div>
+                      <div className="text-sm opacity-100">
+                        <span className="underline font-bold">在地圖搜尋「{mapsQuery}」</span>
                       </div>
                     </motion.button>
 
@@ -1217,9 +1297,10 @@ export default function App() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
                   transition={{ duration: 0.22 }}
-                  className="p-6"
+                  className="p-0 h-[600px] flex flex-col" // 移除 padding 並設定高度
                 >
-                  <div className="flex items-end justify-between gap-3">
+                  {/* Log Header */}
+                  <div className="px-6 pt-6 pb-2 flex items-end justify-between gap-3 shrink-0">
                     <div>
                       <div className="text-xl" style={{ fontWeight: 800, letterSpacing: -0.2 }}>
                         我的食力
@@ -1243,28 +1324,29 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div className="mt-6">
-                    {log.length === 0 ? (
-                      <div
-                        className="rounded-2xl p-5"
-                        style={{
-                          border: "1px dashed rgba(255,138,61,0.35)",
-                          background: "rgba(255,211,106,0.12)",
-                        }}
-                      >
-                        <div className="text-base" style={{ fontWeight: 800 }}>
-                          還沒有食力
+                  {/* Scrollable List Container - 佔據剩餘空間，但底部會被 absolute 遮擋 */}
+                  <div className="flex-1 overflow-y-auto relative px-6">
+                    <div className="pt-2 pb-44 space-y-3"> {/* 增加 pb-44 確保底部內容能滑上來 */}
+                      {log.length === 0 ? (
+                        <div
+                          className="rounded-2xl p-5 mt-4"
+                          style={{
+                            border: "1px dashed rgba(255,138,61,0.35)",
+                            background: "rgba(255,211,106,0.12)",
+                          }}
+                        >
+                          <div className="text-base" style={{ fontWeight: 800 }}>
+                            還沒有食力
+                          </div>
+                          <div className="mt-4 text-sm text-gray-500">
+                             這裡會記錄你所有的覓食歷程
+                          </div>
                         </div>
-                        <div className="mt-4">
-                          <PrimaryButton onClick={goHome}>回首頁</PrimaryButton>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-3">
-                        {log.map((e, idx) => (
+                      ) : (
+                        log.map((e, idx) => (
                           <motion.button
                             key={e.id}
-                            className="rounded-2xl p-3 text-left transition"
+                            className="w-full rounded-3xl p-4 text-left transition flex items-center gap-5"
                             style={{
                               border: "1px solid rgba(30,31,36,0.10)",
                               background: "rgba(255,255,255,0.72)",
@@ -1272,50 +1354,74 @@ export default function App() {
                             }}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.2, delay: Math.min(idx * 0.02, 0.12) }}
+                            transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.3) }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => handleReEat(e)}
                           >
-                            <div className="flex items-center justify-center py-2 pointer-events-none">
+                            {/* 左側：加大能量球 */}
+                            <div className="shrink-0 flex items-center justify-center" style={{ width: 100, height: 100 }}>
                               <EnergyCore
                                 mode={e.sig?.mode ?? "satisfied"}
                                 temp={e.sig?.temp}
                                 richness={e.sig?.richness ?? 0.5}
-                                size={140}
+                                size={100} // 加大尺寸
                               />
                             </div>
-                            <div className="mt-1 text-xs" style={{ color: warm.sub }}>
-                              {fmtDate(e.at)}
-                            </div>
-                            <div className="mt-1 text-sm" style={{ fontWeight: 800 }}>
-                              {(e.choiceText || "").replace("搜尋：", "")}
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-1">
-                              {e.tags?.slice(0, 3).map((t) => (
-                                <span
-                                  key={t}
-                                  className="rounded-full px-2 py-0.5 text-[11px]"
-                                  style={{
-                                    background: "rgba(255,211,106,0.18)",
-                                    border: "1px solid rgba(255,138,61,0.16)",
+
+                            {/* 右側：文字資訊 */}
+                            <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1">
+                                <div className="text-xs mb-1 font-medium" style={{ color: warm.sub }}>
+                                  {fmtDate(e.at)}
+                                </div>
+                                <div 
+                                  className="text-lg font-bold mb-2 leading-tight" 
+                                  style={{ 
                                     color: warm.text,
+                                    display: "-webkit-box",
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: "vertical",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis"
                                   }}
                                 >
-                                  {t}
-                                </span>
-                              ))}
+                                  {(e.choiceText || "").replace("搜尋：", "")}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {e.tags?.slice(0, 3).map((t) => (
+                                    <span
+                                      key={t}
+                                      className="rounded-full px-2.5 py-1 text-xs font-medium"
+                                      style={{
+                                        background: "rgba(255,211,106,0.18)",
+                                        border: "1px solid rgba(255,138,61,0.16)",
+                                        color: warm.text,
+                                      }}
+                                    >
+                                      {t}
+                                    </span>
+                                  ))}
+                                </div>
                             </div>
                           </motion.button>
-                        ))}
-                      </div>
-                    )}
+                        ))
+                      )}
+                    </div>
                   </div>
 
-                  <div className="mt-6 space-y-3">
-                    <PrimaryButton onClick={startDecision}>再覓食一次</PrimaryButton>
-                    <PrimaryButton subtle onClick={goHome}>
-                      回首頁
-                    </PrimaryButton>
+                  {/* Absolute Footer Buttons with Gradient Background */}
+                  <div 
+                    className="absolute bottom-0 left-0 w-full px-6 pb-6 pt-12 space-y-3 pointer-events-none"
+                    style={{
+                      background: "linear-gradient(to top, #FAF9F6 70%, rgba(250, 249, 246, 0.8) 85%, transparent 100%)",
+                      // 讓按鈕可以被點擊
+                    }}
+                  >
+                    <div className="pointer-events-auto space-y-3">
+                      <PrimaryButton onClick={startDecision}>再覓食一次</PrimaryButton>
+                      <PrimaryButton subtle onClick={goHome}>
+                        回首頁
+                      </PrimaryButton>
+                    </div>
                   </div>
                 </motion.div>
               )}
