@@ -201,7 +201,14 @@ function useLocalStorageLog() {
 // --- UI Components ---
 function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full px-3 py-1 text-sm" style={{ background: "rgba(255, 211, 106, 0.22)", color: warm.text, border: "1px solid rgba(255, 138, 61, 0.18)" }}>
+    <span
+      className="inline-flex items-center rounded-full px-3 py-1 text-sm"
+      style={{
+        background: "rgba(255, 211, 106, 0.22)",
+        color: warm.text,
+        border: "1px solid rgba(255, 138, 61, 0.18)",
+      }}
+    >
       {children}
     </span>
   );
@@ -209,8 +216,18 @@ function Tag({ children }: { children: React.ReactNode }) {
 
 function PillButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void; }) {
   return (
-    <button onClick={onClick} className="w-full rounded-2xl px-4 py-4 text-left transition" style={{ border: `1px solid ${active ? "rgba(255,138,61,0.55)" : "rgba(30,31,36,0.10)"}`, background: active ? "rgba(255,138,61,0.10)" : "rgba(255,255,255,0.7)", boxShadow: active ? "0 12px 30px rgba(255,138,61,0.14)" : "0 10px 24px rgba(20,20,20,0.06)" }}>
-      <div className="text-base" style={{ color: warm.text, fontWeight: 600, textAlign: "center" }}>{children}</div>
+    <button
+      onClick={onClick}
+      className="w-full rounded-2xl px-4 py-4 text-left transition"
+      style={{
+        border: `1px solid ${active ? "rgba(255,138,61,0.55)" : "rgba(30,31,36,0.10)"}`,
+        background: active ? "rgba(255,138,61,0.10)" : "rgba(255,255,255,0.7)",
+        boxShadow: active ? "0 12px 30px rgba(255,138,61,0.14)" : "0 10px 24px rgba(20,20,20,0.06)",
+      }}
+    >
+      <div className="text-base" style={{ color: warm.text, fontWeight: 600, textAlign: "center" }}>
+        {children}
+      </div>
     </button>
   );
 }
@@ -319,11 +336,18 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // 🚀 UX 狀態優化：導航與返回偵測
+  const [navigatingId, setNavigatingId] = useState<string | null>(null);
+  const [hasReturned, setHasReturned] = useState(false);
   
   const derived = useMemo(() => computeTags({ temp, form, richness, speed }), [temp, form, richness, speed]);
   const tags = derived.tags;
   const style = derived.style;
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
+
+  // 控制列表顯示數量
+  const VISIBLE_COUNT = 4;
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -334,11 +358,29 @@ export default function App() {
     }
   }, []);
 
+  // 👁️ 監聽使用者是否「回來了」
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible' && navigatingId) {
+            // 輕輕延遲，讓使用者先看清楚原本畫面
+            setTimeout(() => {
+                setHasReturned(true);
+            }, 600);
+        }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [navigatingId]);
+
   useEffect(() => {
     if (screen === "recommend" && userLocation) {
       if (!BACKEND_API_URL) return;
       setIsRealLoading(true);
       setApiError(null);
+      // 重置導航狀態
+      setNavigatingId(null);
+      setHasReturned(false);
       
       const payload = { lat: userLocation.lat, lng: userLocation.lng, query: mapsQuery };
       fetch(BACKEND_API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -362,6 +404,8 @@ export default function App() {
 
   const filteredPlaces = useMemo(() => {
     if (!BACKEND_API_URL || realPlaces.length === 0) return [];
+    
+    // 這裡我們不再只取前 6 個，而是取更多 (e.g., 20)，以備 AI 挑選隱藏版
     const scored = realPlaces.map(p => {
       let score = 0;
       if (p.type === temp) score += 4; 
@@ -370,15 +414,25 @@ export default function App() {
       if (p.speed === speed) score += 1;
       return { place: p, score: score };
     });
+    
+    // 篩選分數
     const candidates = scored.filter(s => s.score >= 2); 
     const finalPool = candidates.length > 0 ? candidates : scored;
+    
+    // 距離排序
     finalPool.sort((a, b) => (a.place.distanceVal ?? 9999) - (b.place.distanceVal ?? 9999));
-    return finalPool.slice(0, 6).map(s => s.place);
+    
+    // 返回前 20 個，讓前端有足夠的量去分配顯示和 AI 挑選
+    return finalPool.slice(0, 20).map(s => s.place);
   }, [temp, form, speed, style, realPlaces]);
+
+  // 真正顯示在卡片列表的店家 (只取前 4 個)
+  const visiblePlaces = useMemo(() => filteredPlaces.slice(0, VISIBLE_COUNT), [filteredPlaces]);
 
   function resetFlow() {
     setChooseStep(0); setTemp(null); setForm(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null);
+    setNavigatingId(null); setHasReturned(false); // Reset nav state
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
@@ -426,21 +480,28 @@ export default function App() {
     setLog((prev) => [entry, ...prev]);
   }
 
-  // 🔥 修正 1：白屏問題 - 使用單純的延遲，避開事件監聽的死鎖風險
-  function handleGoEat(place: Place | string) {
+  // 1. 開始導航 (只開地圖，不換頁)
+  function handleStartNav(place: Place | string) {
     const name = typeof place === 'string' ? place : place.name;
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
+    const id = typeof place === 'object' ? place.id : 'ai_suggestion';
     
-    saveEnergy(name, false); 
+    // 設置狀態：這張卡片正在導航
+    setNavigatingId(id);
+    setHasReturned(false);
     
-    // 1. 立即打開網址 (確保成功開啟)
     const url = getGoogleMapsUrl(name, placeId); 
-    window.open(url, "_blank", "noopener,noreferrer");
-    
-    // 2. 延遲 1 秒後再切換頁面 (避開動畫凍結)
+    // 延遲一點點開啟，讓使用者看到按鈕變化的瞬間
     setTimeout(() => {
-        setScreen("energy"); 
-    }, 1000); 
+        window.open(url, "_blank", "noopener,noreferrer");
+    }, 300);
+  }
+
+  // 2. 完成用餐 (使用者回來後點擊確認)
+  function handleFinishEat(place: Place | string) {
+    const name = typeof place === 'string' ? place : place.name;
+    saveEnergy(name, false); 
+    setScreen("energy");
   }
 
   function handleSearchCategory() {
@@ -462,23 +523,31 @@ export default function App() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  // 🔥 AI 大廚邏輯：瘦身 + 強制推薦精確店家
+  // 🔥 AI 大廚邏輯：避免重複推薦 (Avoid Overlap)
   async function callGeminiChef() {
     if (!BACKEND_GEMINI_URL) return alert("請先設定後端 Gemini API 網址！");
     setIsAiLoading(true);
 
     let targetPlace: Place | null = null;
     
-    if (filteredPlaces.length > 0) {
-        targetPlace = filteredPlaces[Math.floor(Math.random() * Math.min(3, filteredPlaces.length))];
+    // 只從「未顯示在列表上」的店家挑選 (第 5 個以後)
+    // 這樣 AI 推薦的就是真正的「隱藏版」
+    const hiddenCandidates = filteredPlaces.slice(VISIBLE_COUNT);
+
+    if (hiddenCandidates.length > 0) {
+        // 從隱藏名單挑選
+        targetPlace = hiddenCandidates[Math.floor(Math.random() * Math.min(5, hiddenCandidates.length))];
+    } else if (filteredPlaces.length > 0) {
+        // 萬一總數真的太少 (少於 5 個)，只好從現有的挑 (不得不重複)
+        targetPlace = filteredPlaces[Math.floor(Math.random() * filteredPlaces.length)];
     }
 
     let prompt = "";
     if (targetPlace) {
-        // 🔥 Prompt 瘦身：限制字數，要求簡潔
+        // 🔥 Prompt 瘦身：限制字數
         prompt = `使用者想吃：${tags.join(', ')}。
-        我已經在附近找到一家店叫「${targetPlace.name}」。
-        請用繁體中文，以「一句話」推薦這家店，語氣要像在地老饕，簡潔有力，50字以內。
+        推薦一家店叫「${targetPlace.name}」。
+        請用繁體中文，給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
         格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
     } else {
         prompt = `使用者想吃：${tags.join(', ')}。
@@ -614,17 +683,92 @@ export default function App() {
                     
                     {apiError && <div className="py-8 text-center text-red-400">{apiError}</div>}
                     
-                    {filteredPlaces.map((p) => (
-                      <motion.button key={p.id} whileTap={{ scale: 0.99 }} className="w-full rounded-2xl p-4 text-left" style={{ border: "1px solid rgba(30,31,36,0.10)", background: "rgba(255,255,255,0.72)", boxShadow: "0 12px 28px rgba(20,20,20,0.06)" }} onClick={() => handleGoEat(p)}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-base break-words" style={{ fontWeight: 800 }}>{p.name}</div>
-                            <div className="mt-1 text-sm" style={{ color: warm.sub }}>{p.distance} ・ {p.rating ? `★${p.rating}` : '無評分'}</div>
+                    {/* 這裡只顯示前 4 個店家 */}
+                    {visiblePlaces.map((p) => {
+                      const isNavigating = navigatingId === p.id;
+                      
+                      // 樣式切換：根據是否導航、是否回來了
+                      let btnBg = "rgba(255,255,255,0.72)";
+                      let btnBorder = "1px solid rgba(30,31,36,0.10)";
+                      
+                      if (isNavigating && hasReturned) {
+                         // 回來後的狀態 (強調色)
+                         btnBg = "linear-gradient(135deg, #FF9F5E 0%, #FFD97F 100%)";
+                         btnBorder = "1px solid rgba(255,138,61,0.25)";
+                      } else if (isNavigating && !hasReturned) {
+                         // 離開中的狀態 (低調)
+                         btnBg = "rgba(255,255,255,0.9)";
+                      }
+
+                      return (
+                        <motion.button 
+                            key={p.id} 
+                            whileTap={{ scale: 0.99 }} 
+                            className="w-full rounded-2xl p-4 text-left transition-all duration-500 overflow-hidden" 
+                            style={{ border: btnBorder, background: btnBg, boxShadow: "0 12px 28px rgba(20,20,20,0.06)" }} 
+                            onClick={() => {
+                                if (isNavigating && hasReturned) {
+                                    handleFinishEat(p);
+                                } else {
+                                    handleStartNav(p);
+                                }
+                            }}
+                        >
+                          <div className="flex items-start justify-between gap-3 min-h-[50px]">
+                             {/* 這裡使用 AnimatePresence 處理內容的「原地變身」 */}
+                             <AnimatePresence mode="wait">
+                                {isNavigating && !hasReturned ? (
+                                    // 狀態 A: 導航中 (離開)
+                                    <motion.div 
+                                        key="loading"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className="w-full flex items-center justify-center gap-3 py-1"
+                                    >
+                                        <div className="animate-spin text-lg text-gray-400">❋</div>
+                                        <div className="text-sm font-bold text-gray-500">地圖開啟中...</div>
+                                    </motion.div>
+                                ) : isNavigating && hasReturned ? (
+                                    // 狀態 B: 回來了 (確認)
+                                    <motion.div 
+                                        key="confirm"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className="w-full flex items-center justify-between gap-3"
+                                    >
+                                        <div className="flex flex-col">
+                                            <div className="text-sm font-bold text-white opacity-90">已抵達？</div>
+                                            <div className="text-lg font-black text-white">{p.name}</div>
+                                        </div>
+                                        <div className="bg-white/20 rounded-xl px-4 py-2 text-white font-bold text-sm">
+                                            紀錄這次食力 →
+                                        </div>
+                                    </motion.div>
+                                ) : (
+                                    // 狀態 C: 正常顯示
+                                    <motion.div 
+                                        key="normal"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="flex items-start justify-between gap-3 w-full"
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-base break-words" style={{ fontWeight: 800 }}>{p.name}</div>
+                                            <div className="mt-1 text-sm" style={{ color: warm.sub }}>{p.distance} ・ {p.rating ? `★${p.rating}` : '無評分'}</div>
+                                        </div>
+                                        <div className="h-9 w-9 flex-shrink-0 rounded-2xl flex items-center justify-center" style={{ background: "rgba(255,138,61,0.12)", border: "1px solid rgba(255,138,61,0.22)" }}>
+                                            <span style={{ fontWeight: 800, color: warm.orange }} aria-hidden>→</span>
+                                        </div>
+                                    </motion.div>
+                                )}
+                             </AnimatePresence>
                           </div>
-                          <div className="h-9 w-9 flex-shrink-0 rounded-2xl flex items-center justify-center" style={{ background: "rgba(255,138,61,0.12)", border: "1px solid rgba(255,138,61,0.22)" }}><span style={{ fontWeight: 800, color: warm.orange }} aria-hidden>→</span></div>
-                        </div>
-                      </motion.button>
-                    ))}
+                        </motion.button>
+                      );
+                    })}
                     <div className="pt-2 pb-2">
                       <motion.button whileTap={{ scale: 0.98 }} onClick={callGeminiChef} disabled={isAiLoading} className="w-full rounded-2xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)", border: "1px dashed rgba(255,159,94,0.4)", color: warm.text }}>
                         {isAiLoading ? (
@@ -632,7 +776,6 @@ export default function App() {
                         ) : (
                           <>
                             <div className="text-sm font-bold flex items-center justify-center gap-2"><span>✨</span> 都不滿意？讓 AI 大廚幫你挑</div>
-                            {/* 🔥 視覺瘦身：移除了這裡的副標題文字 */}
                           </>
                         )}
                       </motion.button>
@@ -642,7 +785,7 @@ export default function App() {
                         <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500">✨ AI 專屬推薦</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
                         <div className="text-lg font-black mb-1">{aiSuggestion.dish}</div>
                         <div className="text-sm opacity-70 mb-4 leading-relaxed">{aiSuggestion.reason}</div>
-                        <PrimaryButton onClick={() => handleGoEat(aiSuggestion.targetPlace || aiSuggestion.dish)}>出發去吃！ →</PrimaryButton>
+                        <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>出發去吃！ →</PrimaryButton>
                       </motion.div>
                     )}
                     <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.5)", border: "1px solid rgba(0,0,0,0.05)", color: warm.text }}>
@@ -682,7 +825,6 @@ export default function App() {
                             </div>
                             <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1">
                                 <div className="text-xs mb-1 font-medium" style={{ color: warm.sub }}>{fmtDate(e.at)}</div>
-                                {/* 🔥 修正 2：文字自動換行 (whitespace-normal)，解決截斷問題 */}
                                 <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text }}>{(e.choiceText || "").replace("搜尋：", "")}</div>
                                 <div className="flex flex-wrap gap-1.5">{e.tags?.slice(0, 3).map((t) => (<span key={t} className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: "rgba(255,211,106,0.18)", border: "1px solid rgba(255,138,61,0.16)", color: warm.text }}>{t}</span>))}</div>
                             </div>
