@@ -445,17 +445,19 @@ export default function App() {
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     
     const url = getGoogleMapsUrl(name, placeId); 
-    window.open(url, "_blank", "noopener,noreferrer");
-
+    
+    // 修改：使用 location.href 替代 window.open，避免在手機上產生新分頁或內嵌瀏覽器視窗
     saveEnergy(name, false); 
+    window.location.href = url;
     setScreen("energy");
   }
 
   function handleSearchCategory() {
     const url = getGoogleMapsUrl(mapsQuery);
-    window.open(url, "_blank", "noopener,noreferrer");
-
+    
+    // 修改：使用 location.href 替代 window.open
     saveEnergy(`搜尋：${mapsQuery}`, true); 
+    window.location.href = url;
     setScreen("energy"); 
   }
 
@@ -464,7 +466,9 @@ export default function App() {
     if (query.startsWith("搜尋：")) query = query.replace("搜尋：", "");
     
     const url = getGoogleMapsUrl(query);
-    window.open(url, "_blank", "noopener,noreferrer");
+    
+    // 修改：使用 location.href 替代 window.open
+    window.location.href = url;
   }
 
   async function callGeminiChef() {
@@ -720,3 +724,5 @@ export default function App() {
     </div>
   );
 }
+
+
