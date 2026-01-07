@@ -698,42 +698,42 @@ export default function App() {
     setLog((prev) => [entry, ...prev]);
   }
 
-  // 🔥 修正 1：加上 setTimeout 解決白畫面問題
+  // 🔥 修正 1：延遲時間增加到 650ms，確保動畫完成，解決白屏問題
   function handleGoEat(place: Place | string) {
     const name = typeof place === 'string' ? place : place.name;
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     
     saveEnergy(name, false); 
-    setScreen("energy"); // 先切換畫面
+    setScreen("energy"); 
 
     setTimeout(() => {
       const url = getGoogleMapsUrl(name, placeId); 
       window.open(url, "_blank", "noopener,noreferrer");
-    }, 300); // 延遲開啟
+    }, 650); 
   }
 
-  // 🔥 修正 1：加上 setTimeout 解決白畫面問題
+  // 🔥 修正 1：延遲時間增加到 650ms
   function handleSearchCategory() {
     saveEnergy(`搜尋：${mapsQuery}`, true); 
-    setScreen("energy"); // 先切換畫面
+    setScreen("energy"); 
 
     setTimeout(() => {
       const url = getGoogleMapsUrl(mapsQuery);
       window.open(url, "_blank", "noopener,noreferrer");
-    }, 300);
+    }, 650);
   }
 
-  // 🔥 修正 1：加上 setTimeout 解決白畫面問題
+  // 🔥 修正 1：延遲時間增加到 650ms
   function handleReEat(entry: LogEntry) {
     let query = entry.choiceText || ""; 
     if (query.startsWith("搜尋：")) {
       query = query.replace("搜尋：", "");
     }
-    // Log 頁面不需要切換 screen，但為了保險也加延遲
+    
     setTimeout(() => {
       const url = getGoogleMapsUrl(query);
       window.open(url, "_blank", "noopener,noreferrer");
-    }, 300);
+    }, 650);
   }
 
   // --- 手動呼叫 AI 大廚 (Explicit AI Chef) ---
@@ -1006,7 +1006,59 @@ export default function App() {
                 </motion.div>
               )}
 
-              {/* State screen is REMOVED */}
+              {screen === "state" && (
+                <motion.div
+                  key="state"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.22 }}
+                  className="p-6"
+                >
+                  <div className="text-xl" style={{ fontWeight: 800, letterSpacing: -0.2, textAlign: "center" }}>
+                    你現在想吃的是——
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-2 justify-center">
+                    {tags.map((t) => (
+                      <Tag key={t}>{t}</Tag>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 flex items-center justify-center">
+                    <EnergyCore 
+                      mode={pressing ? "chaos" : "stable"} 
+                      temp={temp} 
+                      richness={richness}
+                      size={220} 
+                    />
+                  </div>
+
+                  <div className="mt-6 space-y-3">
+                    <PrimaryButton onClick={() => setScreen("recommend")}>看看附近可以吃什麼</PrimaryButton>
+                    <PrimaryButton
+                      subtle
+                      onClick={() => {
+                        setChooseStep(0);
+                        setScreen("choose");
+                      }}
+                    >
+                      重想一次
+                    </PrimaryButton>
+                    <PrimaryButton
+                      subtle
+                      onLongPress={() => {
+                        setPressing(true);
+                        randomizeAll();
+                        setPressing(false);
+                        setScreen("state");
+                      }}
+                    >
+                      沒想法（長按隨機）
+                    </PrimaryButton>
+                  </div>
+                </motion.div>
+              )}
 
               {screen === "recommend" && (
                 <motion.div
@@ -1302,17 +1354,10 @@ export default function App() {
                                 <div className="text-xs mb-1 font-medium" style={{ color: warm.sub }}>
                                   {fmtDate(e.at)}
                                 </div>
+                                {/* 🔥 修正 2：移除所有截斷，讓文字自動換行長高 */}
                                 <div 
                                   className="text-lg font-bold mb-2 leading-tight" 
-                                  style={{ 
-                                    color: warm.text,
-                                    // 確保文字可以換行，不會被球擠扁
-                                    display: "-webkit-box",
-                                    WebkitLineClamp: 2,
-                                    WebkitBoxOrient: "vertical",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis"
-                                  }}
+                                  style={{ color: warm.text }}
                                 >
                                   {(e.choiceText || "").replace("搜尋：", "")}
                                 </div>
