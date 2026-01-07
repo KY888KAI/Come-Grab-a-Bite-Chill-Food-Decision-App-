@@ -2,15 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 const LS_KEY = "whatnow_energy_log_v1";
-
-// ==========================================
-// 🚀 正式環境設定區
-// ==========================================
-
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
-
-// ==========================================
 
 type Temp = "hot" | "cold";
 type Form = "soup" | "dry";
@@ -125,7 +118,6 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
-// 🌍 智慧情境關鍵字生成器
 function buildMapsQuery(tags: string[]) {
   const hour = new Date().getHours();
   const isMorning = hour >= 5 && hour < 11;
@@ -145,7 +137,6 @@ function buildMapsQuery(tags: string[]) {
 
   let categories: string[] = [];
 
-  // 時段優先
   if (isMorning) {
     categories.push("早餐", "早午餐", "飯糰", "三明治", "蛋餅", "粥");
     if (hasSoup) categories.push("鹹粥", "米粉湯");
@@ -155,7 +146,6 @@ function buildMapsQuery(tags: string[]) {
     categories.push("宵夜", "清粥小菜", "永和豆漿", "鹽酥雞", "串燒", "居酒屋", "深夜食堂");
   }
 
-  // 屬性邏輯
   if (hasRich) {
     categories.push("美式漢堡", "韓式料理", "泰式料理", "燒肉", "咖哩", "麻辣鍋", "熱炒", "川菜");
     if (hasSoup) categories.push("拉麵", "牛肉麵", "火鍋", "燉湯", "壽喜燒");
@@ -171,7 +161,6 @@ function buildMapsQuery(tags: string[]) {
     categories = ["壽司", "沙拉", "涼麵", "波奇碗", "生魚片", "冷滷味", "泰式涼拌"]; 
   }
 
-  // 補強
   if (hasFast) categories.push("便當", "小吃", "速食", "麵線", "水煎包");
   if (hasSit) categories.push("餐廳", "居酒屋", "餐酒館", "牛排", "義大利麵", "合菜");
 
@@ -270,9 +259,9 @@ function TopBar({ title, onBack, onOpenLog, showBack, showLog }: { title: string
       <button className={`rounded-xl px-3 py-2 text-sm ${showBack ? "opacity-100" : "opacity-0 pointer-events-none"}`} onClick={onBack} style={{ border: "1px solid rgba(30,31,36,0.10)", background: "rgba(255,255,255,0.65)", color: warm.text }}>← 返回</button>
       <div className="text-base" style={{ color: warm.sub, fontWeight: 700 }}>{title}</div>
       {showLog ? (
-        <button className="rounded-xl px-3 py-2 text-sm" onClick={onOpenLog} style={{ border: "1px solid rgba(30,31,36,0.10)", background: "rgba(255,255,255,0.65)", color: warm.text, fontWeight: 700 }}>回顧</button>
+        <button className="rounded-xl px-3 py-2 text-sm" onClick={onOpenLog} style={{ border: "1px solid rgba(30,31,36,0.10)", background: "rgba(255,255,255,0.65)", color: warm.text, fontWeight: 700 }}>回顧食力</button>
       ) : (
-        <div className="px-3 py-2 text-sm opacity-0 pointer-events-none">回顧</div>
+        <div className="px-3 py-2 text-sm opacity-0 pointer-events-none">回顧食力</div>
       )}
     </div>
   );
@@ -342,7 +331,6 @@ export default function App() {
   const style = derived.style;
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
 
-  // 控制列表顯示數量 (3，避免卡滿畫面)
   const VISIBLE_COUNT = 3;
 
   useEffect(() => {
@@ -383,7 +371,6 @@ export default function App() {
   const filteredPlaces = useMemo(() => {
     if (!BACKEND_API_URL || realPlaces.length === 0) return [];
     
-    // 這裡我們不再只取前 6 個，而是取更多 (e.g., 20)，以備 AI 挑選隱藏版
     const scored = realPlaces.map(p => {
       let score = 0;
       if (p.type === temp) score += 4; 
@@ -393,18 +380,14 @@ export default function App() {
       return { place: p, score: score };
     });
     
-    // 篩選分數
     const candidates = scored.filter(s => s.score >= 2); 
     const finalPool = candidates.length > 0 ? candidates : scored;
     
-    // 距離排序
     finalPool.sort((a, b) => (a.place.distanceVal ?? 9999) - (b.place.distanceVal ?? 9999));
     
-    // 返回前 20 個，讓前端有足夠的量去分配顯示和 AI 挑選
     return finalPool.slice(0, 20).map(s => s.place);
   }, [temp, form, speed, style, realPlaces]);
 
-  // 真正顯示在卡片列表的店家
   const visiblePlaces = useMemo(() => filteredPlaces.slice(0, VISIBLE_COUNT), [filteredPlaces]);
 
   function resetFlow() {
@@ -457,30 +440,23 @@ export default function App() {
     setLog((prev) => [entry, ...prev]);
   }
 
-  // 1. 出發流程：開啟地圖 -> 自動完成
   function handleStartNav(place: Place | string) {
     const name = typeof place === 'string' ? place : place.name;
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     
-    // 開啟地圖
     const url = getGoogleMapsUrl(name, placeId); 
     window.open(url, "_blank", "noopener,noreferrer");
 
-    // 延遲一下下，讓瀏覽器先處理開窗，然後背景自動跳轉
-    setTimeout(() => {
-        saveEnergy(name, false); 
-        setScreen("energy");
-    }, 800);
+    saveEnergy(name, false); 
+    setScreen("energy");
   }
 
   function handleSearchCategory() {
     const url = getGoogleMapsUrl(mapsQuery);
     window.open(url, "_blank", "noopener,noreferrer");
 
-    setTimeout(() => {
-        saveEnergy(`搜尋：${mapsQuery}`, true); 
-        setScreen("energy"); 
-    }, 800);
+    saveEnergy(`搜尋：${mapsQuery}`, true); 
+    setScreen("energy"); 
   }
 
   function handleReEat(entry: LogEntry) {
@@ -491,28 +467,22 @@ export default function App() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  // 🔥 AI 大廚邏輯
   async function callGeminiChef() {
     if (!BACKEND_GEMINI_URL) return alert("請先設定後端 Gemini API 網址！");
     setIsAiLoading(true);
 
     let targetPlace: Place | null = null;
     
-    // 只從「未顯示在列表上」的店家挑選 (第 5 個以後)
-    // 這樣 AI 推薦的就是真正的「隱藏版」
     const hiddenCandidates = filteredPlaces.slice(VISIBLE_COUNT);
 
     if (hiddenCandidates.length > 0) {
-        // 從隱藏名單挑選
         targetPlace = hiddenCandidates[Math.floor(Math.random() * Math.min(5, hiddenCandidates.length))];
     } else if (filteredPlaces.length > 0) {
-        // 萬一總數真的太少 (少於 5 個)，只好從現有的挑 (不得不重複)
         targetPlace = filteredPlaces[Math.floor(Math.random() * filteredPlaces.length)];
     }
 
     let prompt = "";
     if (targetPlace) {
-        // 🔥 Prompt 瘦身：限制字數
         prompt = `使用者想吃：${tags.join(', ')}。
         推薦一家店叫「${targetPlace.name}」。
         請用繁體中文，給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
@@ -661,7 +631,6 @@ export default function App() {
                             onClick={() => handleStartNav(p)}
                         >
                           <div className="flex items-start justify-between gap-3 min-h-[50px]">
-                                {/* 狀態 C: 正常顯示 (回歸最單純的卡片) */}
                                 <div className="flex items-start justify-between gap-3 w-full">
                                     <div className="flex-1 min-w-0">
                                         <div className="text-base break-words" style={{ fontWeight: 800 }}>{p.name}</div>
