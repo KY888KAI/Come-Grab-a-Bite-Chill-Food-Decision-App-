@@ -161,6 +161,7 @@ function buildMapsQuery(tags: string[]) {
     if (hasSoup) categories.push("拉麵", "牛肉麵", "火鍋", "燉湯", "壽喜燒");
     if (hasDry) categories.push("丼飯", "炸雞", "鐵板燒", "燒臘", "滷肉飯");
   } 
+  
   if (hasLight) {
     categories.push("日式定食", "越南料理", "早午餐", "海鮮", "素食", "健康餐盒");
     if (hasSoup) categories.push("烏龍麵", "魚湯", "粥", "關東煮", "茶泡飯");
@@ -425,40 +426,32 @@ export default function App() {
     setLog((prev) => [entry, ...prev]);
   }
 
-  // 🔥 關鍵修正 1：使用 visibilitychange 徹底解決白屏
+  // 🔥 修正 1：白屏問題 - 使用單純的延遲，避開事件監聽的死鎖風險
   function handleGoEat(place: Place | string) {
     const name = typeof place === 'string' ? place : place.name;
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     
     saveEnergy(name, false); 
     
-    // 1. 直接開啟地圖
+    // 1. 立即打開網址 (確保成功開啟)
     const url = getGoogleMapsUrl(name, placeId); 
     window.open(url, "_blank", "noopener,noreferrer");
-
-    // 2. 監聽「使用者回到 App」的那一瞬間，再進行頁面切換
-    // 這樣保證頁面切換發生在 App 是 Active 的時候，不會造成渲染引擎凍結
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        setScreen("energy");
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // 2. 延遲 1 秒後再切換頁面 (避開動畫凍結)
+    setTimeout(() => {
+        setScreen("energy"); 
+    }, 1000); 
   }
 
   function handleSearchCategory() {
     saveEnergy(`搜尋：${mapsQuery}`, true); 
+    
     const url = getGoogleMapsUrl(mapsQuery);
     window.open(url, "_blank", "noopener,noreferrer");
-    
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        setScreen("energy");
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    setTimeout(() => {
+        setScreen("energy"); 
+    }, 1000);
   }
 
   function handleReEat(entry: LogEntry) {
@@ -467,35 +460,30 @@ export default function App() {
     
     const url = getGoogleMapsUrl(query);
     window.open(url, "_blank", "noopener,noreferrer");
-    
-    // Log 頁面不需要切換 screen，所以不用監聽
   }
 
-  // 🔥 AI 大廚邏輯升級：強制推薦真實店家
+  // 🔥 AI 大廚邏輯：瘦身 + 強制推薦精確店家
   async function callGeminiChef() {
     if (!BACKEND_GEMINI_URL) return alert("請先設定後端 Gemini API 網址！");
     setIsAiLoading(true);
 
-    // 1. 從我們已經抓到的 "真實店家列表" 中挑選
     let targetPlace: Place | null = null;
     
     if (filteredPlaces.length > 0) {
-        // 挑選一個推薦的 (隨機)
         targetPlace = filteredPlaces[Math.floor(Math.random() * Math.min(3, filteredPlaces.length))];
     }
 
-    // 2. 構建 Prompt
     let prompt = "";
     if (targetPlace) {
+        // 🔥 Prompt 瘦身：限制字數，要求簡潔
         prompt = `使用者想吃：${tags.join(', ')}。
         我已經在附近找到一家店叫「${targetPlace.name}」。
-        請用繁體中文，給出一個「推薦這家店」的理由，語氣要像在地老饕，稍微浮誇一點點沒關係。
+        請用繁體中文，以「一句話」推薦這家店，語氣要像在地老饕，簡潔有力，50字以內。
         格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
     } else {
-        // 如果沒有店家資料 (極端狀況)，還是退回推薦菜色
         prompt = `使用者想吃：${tags.join(', ')}。
         請推薦一道具體且適合的台灣常見餐點。
-        回傳 JSON 格式：{ "dish": "餐點名稱", "reason": "一句話推薦理由" }`;
+        回傳 JSON 格式：{ "dish": "餐點名稱", "reason": "一句話推薦理由(30字內)" }`;
     }
 
     try {
@@ -618,8 +606,6 @@ export default function App() {
                   </div>
                   <div className="text-xl" style={{ fontWeight: 800, letterSpacing: -0.2, textAlign: "center" }}>附近可以吃什麼</div>
                   <div className="mt-5 space-y-3">
-                    {/* 移除後端網址警告 */}
-                    
                     {isRealLoading && (
                       <div className="py-8 text-center text-gray-400 animate-pulse">
                          正在搜尋附近的美味...
@@ -646,7 +632,7 @@ export default function App() {
                         ) : (
                           <>
                             <div className="text-sm font-bold flex items-center justify-center gap-2"><span>✨</span> 都不滿意？讓 AI 大廚幫你挑</div>
-                            <div className="text-xs opacity-60 mt-1">為你推薦一家最適合的隱藏好店</div>
+                            {/* 🔥 視覺瘦身：移除了這裡的副標題文字 */}
                           </>
                         )}
                       </motion.button>
@@ -694,9 +680,9 @@ export default function App() {
                             <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
                               <EnergyCore mode={e.sig?.mode ?? "satisfied"} temp={e.sig?.temp} richness={e.sig?.richness ?? 0.5} size={88} />
                             </div>
-                            {/* 🔥 修正 2：卡片內容自動長高，完整顯示所有文字 */}
                             <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1">
                                 <div className="text-xs mb-1 font-medium" style={{ color: warm.sub }}>{fmtDate(e.at)}</div>
+                                {/* 🔥 修正 2：文字自動換行 (whitespace-normal)，解決截斷問題 */}
                                 <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text }}>{(e.choiceText || "").replace("搜尋：", "")}</div>
                                 <div className="flex flex-wrap gap-1.5">{e.tags?.slice(0, 3).map((t) => (<span key={t} className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: "rgba(255,211,106,0.18)", border: "1px solid rgba(255,138,61,0.16)", color: warm.text }}>{t}</span>))}</div>
                             </div>
