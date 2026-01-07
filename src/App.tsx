@@ -266,13 +266,13 @@ function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longP
 
 function TopBar({ title, onBack, onOpenLog, showBack, showLog }: { title: string; onBack: () => void; onOpenLog: () => void; showBack: boolean; showLog: boolean; }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-4 pt-5">
+    <div className="flex items-center justify-between gap-3 px-4 pt-5 pb-2">
       <button className={`rounded-xl px-3 py-2 text-sm ${showBack ? "opacity-100" : "opacity-0 pointer-events-none"}`} onClick={onBack} style={{ border: "1px solid rgba(30,31,36,0.10)", background: "rgba(255,255,255,0.65)", color: warm.text }}>← 返回</button>
-      <div className="text-sm" style={{ color: warm.sub, fontWeight: 700 }}>{title}</div>
+      <div className="text-base" style={{ color: warm.sub, fontWeight: 700 }}>{title}</div>
       {showLog ? (
-        <button className="rounded-xl px-3 py-2 text-sm" onClick={onOpenLog} style={{ border: "1px solid rgba(30,31,36,0.10)", background: "rgba(255,255,255,0.65)", color: warm.text, fontWeight: 700 }}>回顧食力</button>
+        <button className="rounded-xl px-3 py-2 text-sm" onClick={onOpenLog} style={{ border: "1px solid rgba(30,31,36,0.10)", background: "rgba(255,255,255,0.65)", color: warm.text, fontWeight: 700 }}>回顧</button>
       ) : (
-        <div className="px-3 py-2 text-sm opacity-0 pointer-events-none">回顧食力</div>
+        <div className="px-3 py-2 text-sm opacity-0 pointer-events-none">回顧</div>
       )}
     </div>
   );
@@ -337,17 +337,13 @@ export default function App() {
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // 🚀 UX 狀態優化：導航與返回偵測
-  const [navigatingId, setNavigatingId] = useState<string | null>(null);
-  const [hasReturned, setHasReturned] = useState(false);
-  
   const derived = useMemo(() => computeTags({ temp, form, richness, speed }), [temp, form, richness, speed]);
   const tags = derived.tags;
   const style = derived.style;
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
 
-  // 控制列表顯示數量
-  const VISIBLE_COUNT = 4;
+  // 控制列表顯示數量 (3，避免卡滿畫面)
+  const VISIBLE_COUNT = 3;
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -358,29 +354,11 @@ export default function App() {
     }
   }, []);
 
-  // 👁️ 監聽使用者是否「回來了」
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible' && navigatingId) {
-            // 輕輕延遲，讓使用者先看清楚原本畫面
-            setTimeout(() => {
-                setHasReturned(true);
-            }, 600);
-        }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [navigatingId]);
-
   useEffect(() => {
     if (screen === "recommend" && userLocation) {
       if (!BACKEND_API_URL) return;
       setIsRealLoading(true);
       setApiError(null);
-      // 重置導航狀態
-      setNavigatingId(null);
-      setHasReturned(false);
       
       const payload = { lat: userLocation.lat, lng: userLocation.lng, query: mapsQuery };
       fetch(BACKEND_API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -426,13 +404,12 @@ export default function App() {
     return finalPool.slice(0, 20).map(s => s.place);
   }, [temp, form, speed, style, realPlaces]);
 
-  // 真正顯示在卡片列表的店家 (只取前 4 個)
+  // 真正顯示在卡片列表的店家
   const visiblePlaces = useMemo(() => filteredPlaces.slice(0, VISIBLE_COUNT), [filteredPlaces]);
 
   function resetFlow() {
     setChooseStep(0); setTemp(null); setForm(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null);
-    setNavigatingId(null); setHasReturned(false); // Reset nav state
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
@@ -480,39 +457,30 @@ export default function App() {
     setLog((prev) => [entry, ...prev]);
   }
 
-  // 1. 開始導航 (只開地圖，不換頁)
+  // 1. 出發流程：開啟地圖 -> 自動完成
   function handleStartNav(place: Place | string) {
     const name = typeof place === 'string' ? place : place.name;
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
-    const id = typeof place === 'object' ? place.id : 'ai_suggestion';
     
-    // 設置狀態：這張卡片正在導航
-    setNavigatingId(id);
-    setHasReturned(false);
-    
+    // 開啟地圖
     const url = getGoogleMapsUrl(name, placeId); 
-    // 延遲一點點開啟，讓使用者看到按鈕變化的瞬間
-    setTimeout(() => {
-        window.open(url, "_blank", "noopener,noreferrer");
-    }, 300);
-  }
+    window.open(url, "_blank", "noopener,noreferrer");
 
-  // 2. 完成用餐 (使用者回來後點擊確認)
-  function handleFinishEat(place: Place | string) {
-    const name = typeof place === 'string' ? place : place.name;
-    saveEnergy(name, false); 
-    setScreen("energy");
+    // 延遲一下下，讓瀏覽器先處理開窗，然後背景自動跳轉
+    setTimeout(() => {
+        saveEnergy(name, false); 
+        setScreen("energy");
+    }, 800);
   }
 
   function handleSearchCategory() {
-    saveEnergy(`搜尋：${mapsQuery}`, true); 
-    
     const url = getGoogleMapsUrl(mapsQuery);
     window.open(url, "_blank", "noopener,noreferrer");
 
     setTimeout(() => {
+        saveEnergy(`搜尋：${mapsQuery}`, true); 
         setScreen("energy"); 
-    }, 1000);
+    }, 800);
   }
 
   function handleReEat(entry: LogEntry) {
@@ -523,7 +491,7 @@ export default function App() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  // 🔥 AI 大廚邏輯：避免重複推薦 (Avoid Overlap)
+  // 🔥 AI 大廚邏輯
   async function callGeminiChef() {
     if (!BACKEND_GEMINI_URL) return alert("請先設定後端 Gemini API 網址！");
     setIsAiLoading(true);
@@ -673,8 +641,8 @@ export default function App() {
                     <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} />
                     <div className="mt-4 flex flex-wrap gap-2 justify-center">{tags.map((t) => (<Tag key={t}>{t}</Tag>))}</div>
                   </div>
-                  <div className="text-xl" style={{ fontWeight: 800, letterSpacing: -0.2, textAlign: "center" }}>附近可以吃什麼</div>
-                  <div className="mt-5 space-y-3">
+                  
+                  <div className="mt-2 space-y-3">
                     {isRealLoading && (
                       <div className="py-8 text-center text-gray-400 animate-pulse">
                          正在搜尋附近的美味...
@@ -683,88 +651,26 @@ export default function App() {
                     
                     {apiError && <div className="py-8 text-center text-red-400">{apiError}</div>}
                     
-                    {/* 這裡只顯示前 4 個店家 */}
                     {visiblePlaces.map((p) => {
-                      const isNavigating = navigatingId === p.id;
-                      
-                      // 樣式切換：根據是否導航、是否回來了
-                      let btnBg = "rgba(255,255,255,0.72)";
-                      let btnBorder = "1px solid rgba(30,31,36,0.10)";
-                      
-                      if (isNavigating && hasReturned) {
-                         // 回來後的狀態 (強調色)
-                         btnBg = "linear-gradient(135deg, #FF9F5E 0%, #FFD97F 100%)";
-                         btnBorder = "1px solid rgba(255,138,61,0.25)";
-                      } else if (isNavigating && !hasReturned) {
-                         // 離開中的狀態 (低調)
-                         btnBg = "rgba(255,255,255,0.9)";
-                      }
-
                       return (
                         <motion.button 
                             key={p.id} 
                             whileTap={{ scale: 0.99 }} 
-                            className="w-full rounded-2xl p-4 text-left transition-all duration-500 overflow-hidden" 
-                            style={{ border: btnBorder, background: btnBg, boxShadow: "0 12px 28px rgba(20,20,20,0.06)" }} 
-                            onClick={() => {
-                                if (isNavigating && hasReturned) {
-                                    handleFinishEat(p);
-                                } else {
-                                    handleStartNav(p);
-                                }
-                            }}
+                            className="w-full rounded-2xl p-4 text-left transition-all duration-300" 
+                            style={{ border: "1px solid rgba(30,31,36,0.10)", background: "rgba(255,255,255,0.72)", boxShadow: "0 12px 28px rgba(20,20,20,0.06)" }} 
+                            onClick={() => handleStartNav(p)}
                         >
                           <div className="flex items-start justify-between gap-3 min-h-[50px]">
-                             {/* 這裡使用 AnimatePresence 處理內容的「原地變身」 */}
-                             <AnimatePresence mode="wait">
-                                {isNavigating && !hasReturned ? (
-                                    // 狀態 A: 導航中 (離開)
-                                    <motion.div 
-                                        key="loading"
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -10 }}
-                                        className="w-full flex items-center justify-center gap-3 py-1"
-                                    >
-                                        <div className="animate-spin text-lg text-gray-400">❋</div>
-                                        <div className="text-sm font-bold text-gray-500">地圖開啟中...</div>
-                                    </motion.div>
-                                ) : isNavigating && hasReturned ? (
-                                    // 狀態 B: 回來了 (確認)
-                                    <motion.div 
-                                        key="confirm"
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -10 }}
-                                        className="w-full flex items-center justify-between gap-3"
-                                    >
-                                        <div className="flex flex-col">
-                                            <div className="text-sm font-bold text-white opacity-90">已抵達？</div>
-                                            <div className="text-lg font-black text-white">{p.name}</div>
-                                        </div>
-                                        <div className="bg-white/20 rounded-xl px-4 py-2 text-white font-bold text-sm">
-                                            紀錄這次食力 →
-                                        </div>
-                                    </motion.div>
-                                ) : (
-                                    // 狀態 C: 正常顯示
-                                    <motion.div 
-                                        key="normal"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        className="flex items-start justify-between gap-3 w-full"
-                                    >
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-base break-words" style={{ fontWeight: 800 }}>{p.name}</div>
-                                            <div className="mt-1 text-sm" style={{ color: warm.sub }}>{p.distance} ・ {p.rating ? `★${p.rating}` : '無評分'}</div>
-                                        </div>
-                                        <div className="h-9 w-9 flex-shrink-0 rounded-2xl flex items-center justify-center" style={{ background: "rgba(255,138,61,0.12)", border: "1px solid rgba(255,138,61,0.22)" }}>
-                                            <span style={{ fontWeight: 800, color: warm.orange }} aria-hidden>→</span>
-                                        </div>
-                                    </motion.div>
-                                )}
-                             </AnimatePresence>
+                                {/* 狀態 C: 正常顯示 (回歸最單純的卡片) */}
+                                <div className="flex items-start justify-between gap-3 w-full">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-base break-words" style={{ fontWeight: 800 }}>{p.name}</div>
+                                        <div className="mt-1 text-sm" style={{ color: warm.sub }}>{p.distance} ・ {p.rating ? `★${p.rating}` : '無評分'}</div>
+                                    </div>
+                                    <div className="h-9 w-9 flex-shrink-0 rounded-2xl flex items-center justify-center" style={{ background: "rgba(255,138,61,0.12)", border: "1px solid rgba(255,138,61,0.22)" }}>
+                                        <span style={{ fontWeight: 800, color: warm.orange }} aria-hidden>→</span>
+                                    </div>
+                                </div>
                           </div>
                         </motion.button>
                       );
