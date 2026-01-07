@@ -140,7 +140,7 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
 
 // 🌍 自然語言關鍵字生成器
 function buildMapsQuery(tags: string[]) {
-  const hasHot = tags.includes("熱食");
+  // const hasHot = tags.includes("熱食"); // Removed unused variable
   const hasCold = tags.includes("冷食");
   const hasSoup = tags.includes("湯的");
   const hasDry = tags.includes("乾的");
