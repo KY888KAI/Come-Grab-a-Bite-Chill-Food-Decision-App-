@@ -7,7 +7,10 @@ const LS_KEY = "whatnow_energy_log_v1";
 // 🚀 正式環境設定區 (Production Config)
 // ==========================================
 
+// 1. Google Places 後端網址 (Vercel)
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
+
+// 2. Gemini AI 後端網址 (Vercel)
 const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
 
 // ==========================================
@@ -124,8 +127,8 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
-// ⚠️ 這現在只是 "保底" 用 (Fallback)，當 AI 失敗時才會用到
-function getFallbackQuery(tags: string[]) {
+// 🌍 自然語言關鍵字生成器 (主要邏輯)
+function buildMapsQuery(tags: string[]) {
   const hasCold = tags.includes("冷食");
   const hasSoup = tags.includes("湯的");
   const hasDry = tags.includes("乾的");
@@ -295,12 +298,47 @@ export default function App() {
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   
-  // 🔥 新增：儲存主要列表的搜尋關鍵字 (不再只有寫死的，而是由 AI 產生)
-  const [activeQuery, setActiveQuery] = useState<string | null>(null);
-
+  // 🔥 改動 1：不預設為 null，而是直接使用 buildMapsQuery 的結果
+  // 這樣進入頁面時，activeQuery 已經有值，不會顯示 "AI 思考中..."
   const derived = useMemo(() => computeTags({ temp, form, richness, speed }), [temp, form, richness, speed]);
   const tags = derived.tags;
   const style = derived.style;
+  const initialQuery = useMemo(() => buildMapsQuery(tags), [tags]);
+  const [activeQuery, setActiveQuery] = useState<string>(initialQuery);
+
+  useEffect(() => {
+    // 當 tags 改變時 (例如重選)，更新 activeQuery
+    // 這確保每次進入 recommend 都是新的隨機詞
+    if (screen === 'recommend') {
+        const q = buildMapsQuery(tags);
+        setActiveQuery(q);
+        
+        // 🚀 背景 AI 優化 (Silent Upgrade)
+        // 這裡我們偷偷問 AI 有沒有更好的詞，如果有，就更新 activeQuery
+        // 但因為我們已經有 initialQuery，所以介面不會轉圈圈
+        if (BACKEND_GEMINI_URL) {
+            const prompt = `使用者想吃：${tags.join(', ')}。
+            請發揮創意，推薦一個「非固定菜單」的搜尋關鍵字，可以是形容詞組合（如：巷弄隱藏美食）或是具體但有特色的餐點（如：現煮鮮魚湯），目的是在 Google Maps 上找到好吃的東西。
+            只要回傳一個關鍵字即可，不要標點符號。`;
+
+            fetch(BACKEND_GEMINI_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt: prompt })
+            })
+            .then(res => res.json())
+            .then(data => {
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) {
+                    const cleanText = text.trim().replace(/\n/g, "").replace(/。/g, "");
+                    // console.log("Silent AI updated query:", cleanText);
+                    setActiveQuery(cleanText); // 只有當 AI 回傳成功時才更新
+                }
+            })
+            .catch(() => {}); // 失敗就算了，反正我們有 buildMapsQuery 擋著
+        }
+    }
+  }, [screen, tags]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -311,54 +349,11 @@ export default function App() {
     }
   }, []);
 
-  // 🔥 核心改動：進入結果頁時，優先使用 AI 發想關鍵字
-  useEffect(() => {
-    if (screen === "recommend") {
-      setRealPlaces([]); // 清空舊資料
-      setApiError(null);
-      setAiSuggestion(null);
-      setActiveQuery(null); // 先清空，讓 UI 顯示 Loading
-
-      const fallbackQuery = getFallbackQuery(tags);
-
-      // 如果有後端，嘗試呼叫 AI 取得更有彈性的關鍵字
-      if (BACKEND_GEMINI_URL) {
-        setIsRealLoading(true); // 讓列表顯示載入中
-        const prompt = `使用者想吃：${tags.join(', ')}。
-        請發揮創意，推薦一個「非固定菜單」的搜尋關鍵字，可以是形容詞組合（如：巷弄隱藏美食）或是具體但有特色的餐點（如：現煮鮮魚湯），目的是在 Google Maps 上找到好吃的東西。
-        只要回傳一個關鍵字即可，不要標點符號。`;
-
-        fetch(BACKEND_GEMINI_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: prompt })
-        })
-        .then(res => res.json())
-        .then(data => {
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            const cleanText = text.trim().replace(/\n/g, "").replace(/。/g, "");
-            setActiveQuery(cleanText); // AI 成功，使用 AI 關鍵字
-          } else {
-            setActiveQuery(fallbackQuery); // AI 回傳格式不對，用保底
-          }
-        })
-        .catch(err => {
-          console.error("Query Gen Error:", err);
-          setActiveQuery(fallbackQuery); // AI 失敗，用保底
-        });
-      } else {
-        // 沒有後端設定，直接用保底
-        setActiveQuery(fallbackQuery);
-      }
-    }
-  }, [screen, tags]);
-
-  // 根據 activeQuery 抓取店家資料
   useEffect(() => {
     if (screen === "recommend" && userLocation && activeQuery) {
       if (!BACKEND_API_URL) return;
       setIsRealLoading(true);
+      setApiError(null);
       
       const payload = { lat: userLocation.lat, lng: userLocation.lng, query: activeQuery };
       fetch(BACKEND_API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -398,7 +393,7 @@ export default function App() {
 
   function resetFlow() {
     setChooseStep(0); setTemp(null); setForm(null); setRichness(0.5); setSpeed(null);
-    setPressing(false); setAiSuggestion(null); setActiveQuery(null); setRealPlaces([]); setApiError(null);
+    setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null);
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
@@ -446,22 +441,23 @@ export default function App() {
     setLog((prev) => [entry, ...prev]);
   }
 
-  // 🔥 修正 1：白屏修復 - 先開網址，再切狀態
+  // 🔥 關鍵修復 2：先開連結，再更新狀態 (Fix White Screen)
   function handleGoEat(place: Place | string) {
     const name = typeof place === 'string' ? place : place.name;
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     
     saveEnergy(name, false); 
     
-    // 立即打開網址 (Browser friendly)
+    // 1. 立即打開網址，確保瀏覽器不阻擋
     const url = getGoogleMapsUrl(name, placeId); 
     window.open(url, "_blank", "noopener,noreferrer");
 
-    // 然後才切換 App 狀態
-    setScreen("energy"); 
+    // 2. 延遲更新狀態，避免動畫凍結導致白屏
+    setTimeout(() => {
+        setScreen("energy"); 
+    }, 500); 
   }
 
-  // 🔥 修正 1：白屏修復 - 先開網址，再切狀態
   function handleSearchCategory() {
     const query = activeQuery || "美食";
     saveEnergy(`搜尋：${query}`, true); 
@@ -469,10 +465,11 @@ export default function App() {
     const url = getGoogleMapsUrl(query);
     window.open(url, "_blank", "noopener,noreferrer");
 
-    setScreen("energy"); 
+    setTimeout(() => {
+        setScreen("energy"); 
+    }, 500);
   }
 
-  // 🔥 修正 1：白屏修復 - 先開網址
   function handleReEat(entry: LogEntry) {
     let query = entry.choiceText || ""; 
     if (query.startsWith("搜尋：")) query = query.replace("搜尋：", "");
@@ -604,10 +601,10 @@ export default function App() {
                         <div className="text-sm font-bold text-orange-800">⚠️ 請設定後端網址</div>
                       </div>
                     )}
-                    {/* UI 顯示：如果還在想關鍵字，顯示發想中；如果有了關鍵字但還在找店，顯示搜尋中 */}
-                    {(!activeQuery || isRealLoading) && (
+                    {/* 🔥 修正 2：移除 "AI 發想中" 的提示，因為現在 activeQuery 永遠有值 */}
+                    {(isRealLoading) && (
                       <div className="py-8 text-center text-gray-400 animate-pulse">
-                        {!activeQuery ? "AI 正在發想關鍵字..." : `正在搜尋附近的 ${activeQuery}...`}
+                         正在搜尋附近的美味...
                       </div>
                     )}
                     
