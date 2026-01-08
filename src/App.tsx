@@ -405,8 +405,6 @@ export default function App() {
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   
-  const [targetUrl, setTargetUrl] = useState("");
-
   const derived = useMemo(() => computeTags({ temp, form, richness, speed }), [temp, form, richness, speed]);
   const tags = derived.tags;
   const style = derived.style;
@@ -478,7 +476,7 @@ export default function App() {
 
   function resetFlow() {
     setChooseStep(0); setTemp(null); setForm(null); setRichness(0.5); setSpeed(null);
-    setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); setTargetUrl("");
+    setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
@@ -812,6 +810,7 @@ export default function App() {
                       )}
                     </div>
                   </div>
+                  {/* 3. 修復：底部間距問題，增加 pb-10 避免貼底 */}
                   <div className="absolute bottom-0 left-0 w-full px-6 pb-10 pt-12 space-y-5 pointer-events-none" style={{ background: "linear-gradient(to top, #FAF9F6 70%, rgba(250, 249, 246, 0.8) 85%, transparent 100%)" }}>
                     <div className="pointer-events-auto space-y-5"><PrimaryButton onClick={startDecision}>再覓食一次</PrimaryButton><PrimaryButton subtle onClick={goHome}>回首頁</PrimaryButton></div>
                   </div>
