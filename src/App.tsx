@@ -68,7 +68,7 @@ const warm = {
   shadowActive: "0 6px 20px -4px rgba(255, 138, 61, 0.2)",
   highlight: "inset 0 1px 0 0 rgba(255, 255, 255, 0.6)",
   deleteRed: "#FF6B6B",
-  pinGreen: "#4ECDC4", 
+  // 移除 pinGreen，改用 orange
 } as const;
 
 function clamp(n: number, a: number, b: number) {
@@ -88,8 +88,9 @@ function fmtDate(iso: string) {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// 修改：僅回傳純文字標題，不帶 Emoji，改由 UI 渲染 SVG
 function groupLogsByDate(logs: LogEntry[]) {
-  const groups: { title: string; items: LogEntry[] }[] = [];
+  const groups: { title: string; type: 'pinned' | 'date'; items: LogEntry[] }[] = [];
   const pinned: LogEntry[] = [];
   const today: LogEntry[] = [];
   const yesterday: LogEntry[] = [];
@@ -110,10 +111,10 @@ function groupLogsByDate(logs: LogEntry[]) {
     else older.push(log);
   });
 
-  if (pinned.length > 0) groups.push({ title: "📌 釘選置頂", items: pinned });
-  if (today.length > 0) groups.push({ title: "📅 今天", items: today });
-  if (yesterday.length > 0) groups.push({ title: "📅 昨天", items: yesterday });
-  if (older.length > 0) groups.push({ title: "📅 更早之前", items: older });
+  if (pinned.length > 0) groups.push({ title: "釘選置頂", type: 'pinned', items: pinned });
+  if (today.length > 0) groups.push({ title: "今天", type: 'date', items: today });
+  if (yesterday.length > 0) groups.push({ title: "昨天", type: 'date', items: yesterday });
+  if (older.length > 0) groups.push({ title: "更早之前", type: 'date', items: older });
 
   return groups;
 }
@@ -236,7 +237,7 @@ function useLocalStorageLog() {
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="inline-flex items-center rounded-full px-2.5 py-1 text-[13px] tracking-wide whitespace-nowrap flex-shrink-0" // 增加不換行與不壓縮屬性
+      className="inline-flex items-center rounded-full px-2.5 py-1 text-[13px] tracking-wide whitespace-nowrap flex-shrink-0" 
       style={{
         background: "rgba(255, 211, 106, 0.15)", 
         color: "#6B5D52",
@@ -252,18 +253,33 @@ function Tag({ children }: { children: React.ReactNode }) {
 // 支援左右滑動的清單項目元件
 function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void }) {
   const x = useMotionValue(0);
-  const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.pinGreen]);
+  const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
   const [isDragging, setIsDragging] = useState(false);
 
   return (
     <div className="relative mb-3 group">
-      {/* 背景層：顯示操作提示 */}
+      {/* 背景層：顯示操作提示 (修改為 SVG 圖示) */}
       <motion.div 
         className="absolute inset-0 rounded-3xl flex items-center justify-between px-6"
         style={{ background }}
       >
-        <span className="text-white font-bold text-sm flex items-center gap-1">📌 釘選</span>
-        <span className="text-white font-bold text-sm flex items-center gap-1">🗑️ 刪除</span>
+        {/* 左側內容 (右滑時顯示 - 釘選) */}
+        <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
+           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+             <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+           </svg>
+           <span className="font-bold text-sm">釘選</span>
+        </div>
+
+        {/* 右側內容 (左滑時顯示 - 刪除) */}
+        <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
+           <span className="font-bold text-sm">刪除</span>
+           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+             <path d="M3 6h18"></path>
+             <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+             <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+           </svg>
+        </div>
       </motion.div>
 
       {/* 前景層：可滑動的卡片 */}
@@ -294,12 +310,21 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
             <div className="flex justify-between items-center mb-1">
                 <div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>
-                {item.isPinned && <span className="text-xs" style={{color: warm.orange}}>📌</span>}
+                {/* 修改：已釘選標示改為實心橘色圖釘 */}
+                {item.isPinned && (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={warm.orange} stroke="none">
+                        <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                    </svg>
+                )}
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
             
-            {/* 調整：flex-nowrap 強制不換行，overflow-x-auto 允許滑動，no-scrollbar 隱藏滾動條 */}
-            <div className="flex flex-nowrap gap-1.5 overflow-x-auto no-scrollbar w-full" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {/* 解決衝突：在標籤容器上阻止事件冒泡，讓它可以獨立左右滑動，不觸發卡片的拖曳 */}
+            <div 
+                className="flex flex-nowrap gap-1.5 overflow-x-auto no-scrollbar w-full pr-4" 
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                onPointerDown={(e) => e.stopPropagation()}
+            >
                 {item.tags?.slice(0, 3).map((t) => (
                   <Tag key={t}>{t}</Tag>
                 ))}
@@ -614,6 +639,7 @@ export default function App() {
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     const url = getGoogleMapsUrl(name, placeId); 
     
+    // 立即記錄並跳轉，不等待 (手機體驗優先)
     saveEnergy(name, false); 
     setScreen("energy");
     navigateToMap(url);
@@ -759,7 +785,6 @@ export default function App() {
                       <>
                         <div className="mt-2 rounded-2xl p-5" style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.5)" }}>
                           <div className="flex items-center justify-between"><span className="text-xs" style={{ color: warm.sub }}>清爽</span><span className="text-xs" style={{ color: warm.sub }}>重口</span></div>
-                          {/* 美化拉條：客製化 Slider - 移除 transition-all 解決卡頓 */}
                           <div className="relative w-full h-6 mt-4 mb-2 flex items-center">
                             <div className="absolute w-full h-2 rounded-full overflow-hidden" style={{ background: "linear-gradient(90deg, #FAD961 0%, #F76B1C 100%)", opacity: 0.3 }}></div>
                             <input 
@@ -853,6 +878,7 @@ export default function App() {
                         <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>出發去吃！ →</PrimaryButton>
                       </motion.div>
                     )}
+                    {/* 1. 修復：沒看到想吃的按鈕邊框 */}
                     <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
                       <div className="text-sm opacity-60 font-medium">還是沒看到想吃的？</div>
                       <div className="text-sm opacity-90"><span className="underline font-bold" style={{textUnderlineOffset: 3}}>在地圖搜尋「{mapsQuery}」</span></div>
@@ -874,6 +900,7 @@ export default function App() {
                 <motion.div key="log" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-0 h-[600px] flex flex-col">
                   <div className="px-6 pt-8 pb-2 flex items-end justify-between gap-3 shrink-0">
                     <div><div className="text-xl" style={{ fontWeight: 700, letterSpacing: "0.02em" }}>我的食力</div><div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>回顧每一次的美味選擇</div></div>
+                    {/* 2. 修復：清空按鈕邊框 */}
                     <button className="rounded-xl px-3 py-2 text-xs font-medium" style={{ border: warm.borderAction, background: "rgba(255,255,255,0.5)", color: warm.orange }} onClick={() => setLog([])} title="清空本機紀錄">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M3 6h18"></path>
@@ -884,6 +911,7 @@ export default function App() {
                   </div>
                   <div className="flex-1 overflow-y-auto relative px-6">
                     <div className="pt-4 pb-44 space-y-3">
+                      {/* 新增：分組顯示 */}
                       {groupedLogs.length === 0 ? (
                         <div className="rounded-2xl p-6 mt-4 text-center" style={{ border: "1px dashed rgba(255,138,61,0.3)", background: "rgba(255,211,106,0.08)" }}>
                           <div className="text-base font-bold" style={{color: warm.text}}>還沒有食力</div><div className="mt-2 text-sm text-gray-500">這裡會記錄你所有的覓食歷程</div>
@@ -891,7 +919,23 @@ export default function App() {
                       ) : (
                         groupedLogs.map((group) => (
                           <div key={group.title} className="mb-6">
-                            <div className="text-xs font-bold mb-2 ml-1" style={{ color: warm.sub, letterSpacing: "0.05em" }}>{group.title}</div>
+                            <div className="flex items-center gap-2 mb-2 ml-1">
+                                {group.type === 'pinned' && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="12" y1="17" x2="12" y2="22"></line>
+                                      <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
+                                    </svg>
+                                )}
+                                {group.type === 'date' && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                )}
+                                <span className="text-xs font-bold" style={{ color: warm.sub, letterSpacing: "0.05em" }}>{group.title}</span>
+                            </div>
                             {group.items.map((item) => (
                               <SwipeableLogItem 
                                 key={item.id} 
@@ -906,6 +950,7 @@ export default function App() {
                       )}
                     </div>
                   </div>
+                  {/* 3. 修復：底部間距問題，增加 pb-10 避免貼底 */}
                   <div className="absolute bottom-0 left-0 w-full px-6 pb-10 pt-12 space-y-5 pointer-events-none" style={{ background: "linear-gradient(to top, #FAF9F6 70%, rgba(250, 249, 246, 0.8) 85%, transparent 100%)" }}>
                     <div className="pointer-events-auto space-y-5"><PrimaryButton onClick={startDecision}>再覓食一次</PrimaryButton><PrimaryButton subtle onClick={goHome}>回首頁</PrimaryButton></div>
                   </div>
