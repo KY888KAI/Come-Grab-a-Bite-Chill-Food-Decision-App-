@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform } from "framer-motion";
 
-const LS_KEY = "whatnow_energy_log_v2"; // 更新 key 以避免舊資料衝突
+const LS_KEY = "whatnow_energy_log_v2"; 
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
 
@@ -37,7 +37,7 @@ type LogEntry = {
   tags: string[];
   choiceText: string;
   isCategory?: boolean;
-  isPinned?: boolean; // 新增：釘選狀態
+  isPinned?: boolean; 
   sig?: {
     warmth: number; 
     mode: "satisfied" | "stable" | "chaos";
@@ -54,7 +54,7 @@ type AiSuggestion = {
   targetPlace?: Place;
 } | null;
 
-// --- 視覺風格系統 (Refined V8 - Pure Warmth) ---
+// --- 視覺風格系統 ---
 const warm = {
   bg: "#FAF9F6", 
   text: "#595048", 
@@ -67,7 +67,6 @@ const warm = {
   shadow: "0 4px 12px -2px rgba(255, 159, 94, 0.1)",
   shadowActive: "0 6px 20px -4px rgba(255, 138, 61, 0.2)",
   highlight: "inset 0 1px 0 0 rgba(255, 255, 255, 0.6)",
-  // 新增功能色
   deleteRed: "#FF6B6B",
   pinGreen: "#4ECDC4", 
 } as const;
@@ -89,7 +88,6 @@ function fmtDate(iso: string) {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-// 日期分組邏輯
 function groupLogsByDate(logs: LogEntry[]) {
   const groups: { title: string; items: LogEntry[] }[] = [];
   const pinned: LogEntry[] = [];
@@ -238,7 +236,7 @@ function useLocalStorageLog() {
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="inline-flex items-center rounded-full px-2.5 py-1 text-[13px] tracking-wide"
+      className="inline-flex items-center rounded-full px-2.5 py-1 text-[13px] tracking-wide whitespace-nowrap flex-shrink-0" // 增加不換行與不壓縮屬性
       style={{
         background: "rgba(255, 211, 106, 0.15)", 
         color: "#6B5D52",
@@ -271,15 +269,18 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
       {/* 前景層：可滑動的卡片 */}
       <motion.div
         className="relative w-full bg-white rounded-3xl p-3.5 text-left flex items-center gap-4 cursor-grab active:cursor-grabbing"
-        style={{ x, border: warm.borderSubtle, background: "rgba(255,255,255,0.9)", boxShadow: warm.shadow }}
+        style={{ x, border: warm.borderSubtle, background: "#FFFFFF", boxShadow: warm.shadow }}
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.7} 
         onDragStart={() => setIsDragging(true)}
         onDragEnd={(_, { offset }) => {
           setIsDragging(false);
-          if (offset.x < -80) {
-            onDelete();
-          } else if (offset.x > 80) {
+          if (offset.x < -60) {
+            if (window.confirm("確定要刪除這筆紀錄嗎？")) {
+                onDelete();
+            }
+          } else if (offset.x > 60) {
             onPin();
           }
         }}
@@ -290,15 +291,19 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
           <EnergyCore mode={item.sig?.mode ?? "satisfied"} temp={item.sig?.temp} richness={item.sig?.richness ?? 0.5} size={88} />
         </div>
-        <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1">
+        <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
             <div className="flex justify-between items-center mb-1">
                 <div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>
                 {item.isPinned && <span className="text-xs" style={{color: warm.orange}}>📌</span>}
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-            <div className="flex flex-wrap gap-1.5">{item.tags?.slice(0, 3).map((t) => (
-              <Tag key={t}>{t}</Tag>
-            ))}</div>
+            
+            {/* 調整：flex-nowrap 強制不換行，overflow-x-auto 允許滑動，no-scrollbar 隱藏滾動條 */}
+            <div className="flex flex-nowrap gap-1.5 overflow-x-auto no-scrollbar w-full" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                {item.tags?.slice(0, 3).map((t) => (
+                  <Tag key={t}>{t}</Tag>
+                ))}
+            </div>
         </div>
       </motion.div>
     </div>
@@ -478,7 +483,6 @@ export default function App() {
   const style = derived.style;
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
 
-  // 新增：分組後的紀錄資料
   const groupedLogs = useMemo(() => groupLogsByDate(log), [log]);
 
   const VISIBLE_COUNT = 3;
@@ -610,7 +614,6 @@ export default function App() {
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     const url = getGoogleMapsUrl(name, placeId); 
     
-    // 立即記錄並跳轉，不等待 (手機體驗優先)
     saveEnergy(name, false); 
     setScreen("energy");
     navigateToMap(url);
@@ -756,6 +759,7 @@ export default function App() {
                       <>
                         <div className="mt-2 rounded-2xl p-5" style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.5)" }}>
                           <div className="flex items-center justify-between"><span className="text-xs" style={{ color: warm.sub }}>清爽</span><span className="text-xs" style={{ color: warm.sub }}>重口</span></div>
+                          {/* 美化拉條：客製化 Slider - 移除 transition-all 解決卡頓 */}
                           <div className="relative w-full h-6 mt-4 mb-2 flex items-center">
                             <div className="absolute w-full h-2 rounded-full overflow-hidden" style={{ background: "linear-gradient(90deg, #FAD961 0%, #F76B1C 100%)", opacity: 0.3 }}></div>
                             <input 
@@ -768,7 +772,7 @@ export default function App() {
                               className="w-full absolute z-10 opacity-0 cursor-pointer h-full"
                             />
                             <div 
-                              className="absolute h-5 w-5 rounded-full shadow-md transition-all pointer-events-none" 
+                              className="absolute h-5 w-5 rounded-full shadow-md pointer-events-none" 
                               style={{ 
                                 left: `calc(${richness * 100}% - 10px)`, 
                                 background: `linear-gradient(135deg, ${warm.yellow} 0%, ${warm.orange} 100%)`,
