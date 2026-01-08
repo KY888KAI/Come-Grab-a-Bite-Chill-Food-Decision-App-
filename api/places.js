@@ -11,8 +11,8 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 2. 取得前端傳來的參數
-  const { lat, lng, query } = req.body;
+  // 2. 取得前端傳來的參數 (新增 language)
+  const { lat, lng, query, language } = req.body;
 
   if (!lat || !lng) {
     return res.status(400).json({ error: "Missing location data" });
@@ -39,7 +39,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         textQuery: query || "餐廳",
-        languageCode: "zh-TW", // ★ 強制要求 Google 回傳繁體中文資料
+        // ★ 關鍵修改：使用前端傳來的語系，如果沒有則預設繁體中文
+        languageCode: language || "zh-TW", 
         locationBias: {
           circle: {
             center: { latitude: lat, longitude: lng },
@@ -52,7 +53,7 @@ export default async function handler(req, res) {
     });
 
     if (!googleRes.ok) {
-      // ⚠️ 關鍵修改：捕捉 Google 回傳的詳細錯誤文字
+      // 捕捉 Google 回傳的詳細錯誤文字
       const errorText = await googleRes.text();
       console.error(`Google API Error (${googleRes.status}):`, errorText);
       throw new Error(`Google 拒絕連線 (${googleRes.status}): ${errorText}`);
@@ -77,7 +78,7 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Backend Error:", error);
-    // ⚠️ 關鍵修改：將詳細錯誤回傳給前端，讓您在畫面上看得到
+    // 將詳細錯誤回傳給前端，方便除錯
     res.status(500).json({ 
       error: "Google API 呼叫失敗", 
       details: error.message 
