@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useTransform } from "framer-motion";
 
-const LS_KEY = "whatnow_energy_log_v1";
+const LS_KEY = "whatnow_energy_log_v2"; // 更新 key 以避免舊資料衝突
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
 
@@ -9,8 +9,7 @@ const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.
 const DEFAULT_LOCATION = { lat: 25.0478, lng: 121.5170 };
 
 type Temp = "hot" | "cold";
-// 修改：將 "湯/乾" (Form) 改為 "飢餓度" (Hunger)
-type Hunger = "full" | "snack"; // full=吃飽, snack=解饞
+type Hunger = "full" | "snack"; 
 type Speed = "fast" | "sit";
 type Style = "light" | "rich";
 
@@ -21,7 +20,7 @@ type Place = {
   name: string;
   type?: Temp;
   style?: Style;
-  hunger?: Hunger; // 更新欄位
+  hunger?: Hunger;
   speed?: Speed;
   price?: "budget" | "mid";
   queryKeyword?: string; 
@@ -41,11 +40,12 @@ type LogEntry = {
   tags: string[];
   choiceText: string;
   isCategory?: boolean;
+  isPinned?: boolean; // 新增：釘選狀態
   sig?: {
     warmth: number; 
     mode: "satisfied" | "stable" | "chaos";
     temp: Temp | null;
-    hunger: Hunger | null; // 更新欄位
+    hunger: Hunger | null;
     speed: Speed | null;
     richness: number;
   };
@@ -70,6 +70,9 @@ const warm = {
   shadow: "0 4px 12px -2px rgba(255, 159, 94, 0.1)",
   shadowActive: "0 6px 20px -4px rgba(255, 138, 61, 0.2)",
   highlight: "inset 0 1px 0 0 rgba(255, 255, 255, 0.6)",
+  // 新增功能色
+  deleteRed: "#FF6B6B",
+  pinGreen: "#4ECDC4", 
 } as const;
 
 function clamp(n: number, a: number, b: number) {
@@ -84,9 +87,40 @@ function fmtDate(iso: string) {
   const d = new Date(iso);
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return `今天 ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
   }
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// 日期分組邏輯
+function groupLogsByDate(logs: LogEntry[]) {
+  const groups: { title: string; items: LogEntry[] }[] = [];
+  const pinned: LogEntry[] = [];
+  const today: LogEntry[] = [];
+  const yesterday: LogEntry[] = [];
+  const older: LogEntry[] = [];
+
+  const now = new Date();
+  const todayStr = now.toDateString();
+  const yesterdayStr = new Date(now.setDate(now.getDate() - 1)).toDateString();
+
+  logs.forEach(log => {
+    if (log.isPinned) {
+      pinned.push(log);
+      return;
+    }
+    const d = new Date(log.at).toDateString();
+    if (d === todayStr) today.push(log);
+    else if (d === yesterdayStr) yesterday.push(log);
+    else older.push(log);
+  });
+
+  if (pinned.length > 0) groups.push({ title: "📌 釘選置頂", items: pinned });
+  if (today.length > 0) groups.push({ title: "📅 今天", items: today });
+  if (yesterday.length > 0) groups.push({ title: "📅 昨天", items: yesterday });
+  if (older.length > 0) groups.push({ title: "📅 更早之前", items: older });
+
+  return groups;
 }
 
 function deg2rad(deg: number) {
@@ -104,16 +138,13 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
   return R * c; 
 }
 
-// 邏輯更新：計算標籤時使用 Hunger
 function computeTags(args: { temp: Temp | null; hunger: Hunger | null; richness: number; speed: Speed | null }) {
   const { temp, hunger, richness, speed } = args;
   const style: Style = richness >= 0.55 ? "rich" : "light";
   const t: string[] = [];
   
   if (temp) t.push(temp === "hot" ? "熱食" : "冷食");
-  // 更新標籤文字
   if (hunger) t.push(hunger === "full" ? "吃飽" : "解饞");
-  
   t.push(style === "rich" ? "重口" : "清爽");
   if (speed) t.push(speed === "fast" ? "快點" : "坐下來吃");
   return { tags: t, style };
@@ -133,7 +164,6 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
-// 智慧導航函式
 function navigateToMap(url: string) {
   const isInIframe = window.self !== window.top;
   if (isInIframe) {
@@ -143,7 +173,6 @@ function navigateToMap(url: string) {
   }
 }
 
-// 邏輯更新：根據「吃飽/解饞」產生關鍵字
 function buildMapsQuery(tags: string[]) {
   const hour = new Date().getHours();
   const isMorning = hour >= 5 && hour < 11;
@@ -163,9 +192,7 @@ function buildMapsQuery(tags: string[]) {
 
   let categories: string[] = [];
 
-  // 1. 先根據「吃飽 vs 解饞」決定大方向
   if (hasFull) {
-      // 吃飽：正餐類
       if (isMorning) {
           categories.push("早午餐", "飯糰", "鹹粥", "蛋餅", "早餐店");
       } else {
@@ -174,17 +201,14 @@ function buildMapsQuery(tags: string[]) {
           if (hasLight) categories.push("健康餐盒", "壽司", "越南河粉", "烏龍麵", "素食", "定食");
       }
   } else if (hasSnack) {
-      // 解饞：小吃、點心類
       categories.push("鹹酥雞", "滷味", "車輪餅", "雞蛋糕", "章魚燒", "蔥油餅", "地瓜球", "炸雞", "串燒");
       if (hasCold) categories.push("豆花", "剉冰", "手搖飲", "甜點", "蛋糕");
       if (isAfternoon) categories.push("下午茶", "鬆餅", "咖啡廳", "麵包店");
       if (isLateNight) categories.push("宵夜", "永和豆漿", "鹽水雞", "串燒");
   } else {
-      // 如果沒選 (理論上不會發生，或是隨機模式)，混合推薦
       categories = ["美食", "小吃", "餐廳"];
   }
 
-  // 2. 根據其他屬性微調 (如果類別還很少)
   if (categories.length < 3) {
       if (hasCold) categories.push("涼麵", "沙拉", "生魚片", "壽司");
       if (hasSit) categories.push("餐廳", "居酒屋", "餐酒館");
@@ -227,6 +251,60 @@ function Tag({ children }: { children: React.ReactNode }) {
     >
       {children}
     </span>
+  );
+}
+
+// 支援左右滑動的清單項目元件
+function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void }) {
+  const x = useMotionValue(0);
+  const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.pinGreen]);
+  const [isDragging, setIsDragging] = useState(false);
+
+  return (
+    <div className="relative mb-3 group">
+      {/* 背景層：顯示操作提示 */}
+      <motion.div 
+        className="absolute inset-0 rounded-3xl flex items-center justify-between px-6"
+        style={{ background }}
+      >
+        <span className="text-white font-bold text-sm flex items-center gap-1">📌 釘選</span>
+        <span className="text-white font-bold text-sm flex items-center gap-1">🗑️ 刪除</span>
+      </motion.div>
+
+      {/* 前景層：可滑動的卡片 */}
+      <motion.div
+        className="relative w-full bg-white rounded-3xl p-3.5 text-left flex items-center gap-4 cursor-grab active:cursor-grabbing"
+        style={{ x, border: warm.borderSubtle, background: "rgba(255,255,255,0.9)", boxShadow: warm.shadow }}
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        onDragStart={() => setIsDragging(true)}
+        onDragEnd={(e, { offset, velocity }) => {
+          setIsDragging(false);
+          if (offset.x < -80) {
+            onDelete();
+          } else if (offset.x > 80) {
+            onPin();
+          }
+        }}
+        onClick={() => {
+            if (!isDragging) onReEat();
+        }}
+      >
+        <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
+          <EnergyCore mode={item.sig?.mode ?? "satisfied"} temp={item.sig?.temp} richness={item.sig?.richness ?? 0.5} size={88} />
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1">
+            <div className="flex justify-between items-center mb-1">
+                <div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>
+                {item.isPinned && <span className="text-xs" style={{color: warm.orange}}>📌</span>}
+            </div>
+            <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
+            <div className="flex flex-wrap gap-1.5">{item.tags?.slice(0, 3).map((t) => (
+              <Tag key={t}>{t}</Tag>
+            ))}</div>
+        </div>
+      </motion.div>
+    </div>
   );
 }
 
@@ -383,7 +461,6 @@ export default function App() {
   const totalChooseSteps = 3;
 
   const [temp, setTemp] = useState<Temp | null>(null);
-  // 更新 State：使用 hunger 替代 form
   const [hunger, setHunger] = useState<Hunger | null>(null);
   const [richness, setRichness] = useState(0.5);
   const [speed, setSpeed] = useState<Speed | null>(null);
@@ -403,6 +480,9 @@ export default function App() {
   const tags = derived.tags;
   const style = derived.style;
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
+
+  // 新增：分組後的紀錄資料
+  const groupedLogs = useMemo(() => groupLogsByDate(log), [log]);
 
   const VISIBLE_COUNT = 3;
 
@@ -430,7 +510,7 @@ export default function App() {
         lat: userLocation.lat, 
         lng: userLocation.lng, 
         query: mapsQuery,
-        language: navigator.language // 自動偵測瀏覽器語系傳給後端
+        language: navigator.language 
       };
 
       fetch(BACKEND_API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -499,7 +579,7 @@ export default function App() {
 
   function randomizeAll() {
     setTemp(Math.random() > 0.5 ? "hot" : "cold");
-    setHunger(Math.random() > 0.5 ? "full" : "snack"); // 更新隨機邏輯
+    setHunger(Math.random() > 0.5 ? "full" : "snack");
     setSpeed(Math.random() > 0.5 ? "fast" : "sit");
     setRichness(Math.random());
   }
@@ -519,9 +599,18 @@ export default function App() {
       tags,
       choiceText: choiceText || "",
       isCategory, 
+      isPinned: false, // 預設不置頂
       sig: { warmth: clamp(0.35 + richness * 0.65, 0, 1), mode: "satisfied", temp, hunger, speed, richness },
     };
     setLog((prev) => [entry, ...prev]);
+  }
+
+  function togglePin(id: string) {
+    setLog(prev => prev.map(item => item.id === id ? { ...item, isPinned: !item.isPinned } : item));
+  }
+
+  function deleteLog(id: string) {
+    setLog(prev => prev.filter(item => item.id !== id));
   }
 
   function handleStartNav(place: Place | string) {
@@ -536,7 +625,6 @@ export default function App() {
 
   function handleSearchCategory() {
     const url = getGoogleMapsUrl(mapsQuery);
-    
     saveEnergy(`搜尋：${mapsQuery}`, true); 
     setScreen("energy"); 
     navigateToMap(url);
@@ -545,7 +633,6 @@ export default function App() {
   function handleReEat(entry: LogEntry) {
     let query = entry.choiceText || ""; 
     if (query.startsWith("搜尋：")) query = query.replace("搜尋：", "");
-    
     const url = getGoogleMapsUrl(query);
     navigateToMap(url);
   }
@@ -646,7 +733,6 @@ export default function App() {
                     <button onMouseDown={handlePressDown} onMouseUp={handlePressUp} onMouseLeave={handlePressUp} onTouchStart={handlePressDown} onTouchEnd={handlePressUp} className="w-full rounded-2xl px-4 py-4 transition overflow-hidden relative" style={{ border: warm.border, background: pressing ? "linear-gradient(135deg, rgba(255,138,61,0.18) 0%, rgba(255,211,106,0.22) 100%)" : "rgba(255,255,255,0.75)", boxShadow: pressing ? warm.shadowActive : warm.shadow }}>
                       <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>沒想法</div>
                       <div className="relative z-10 mt-1 text-sm" style={{ color: warm.sub, textAlign: "center" }}>長按一下，隨緣覓食</div>
-                       {/* 增加流光質感 */}
                        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
                     </button>
                   </div>
@@ -667,7 +753,6 @@ export default function App() {
                     )}
                     {chooseStep === 1 && (
                       <>
-                        {/* 修改步驟2：吃飽 vs 解饞 */}
                         <PillButton active={hunger === "full"} onClick={() => setHunger("full")}>吃飽</PillButton>
                         <PillButton active={hunger === "snack"} onClick={() => setHunger("snack")}>解饞</PillButton>
                         <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!hunger}>下一步</PrimaryButton></div>
@@ -677,7 +762,28 @@ export default function App() {
                       <>
                         <div className="mt-2 rounded-2xl p-5" style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.5)" }}>
                           <div className="flex items-center justify-between"><span className="text-xs" style={{ color: warm.sub }}>清爽</span><span className="text-xs" style={{ color: warm.sub }}>重口</span></div>
-                          <input type="range" min={0} max={1} step={0.01} value={richness} onChange={(e) => setRichness(parseFloat(e.target.value))} className="w-full mt-4 mb-2" style={{ accentColor: warm.orange }} />
+                          {/* 美化拉條：客製化 Slider */}
+                          <div className="relative w-full h-6 mt-4 mb-2 flex items-center">
+                            <div className="absolute w-full h-2 rounded-full overflow-hidden" style={{ background: "linear-gradient(90deg, #FAD961 0%, #F76B1C 100%)", opacity: 0.3 }}></div>
+                            <input 
+                              type="range" 
+                              min={0} 
+                              max={1} 
+                              step={0.01} 
+                              value={richness} 
+                              onChange={(e) => setRichness(parseFloat(e.target.value))} 
+                              className="w-full absolute z-10 opacity-0 cursor-pointer h-full"
+                            />
+                            <div 
+                              className="absolute h-5 w-5 rounded-full shadow-md transition-all pointer-events-none" 
+                              style={{ 
+                                left: `calc(${richness * 100}% - 10px)`, 
+                                background: `linear-gradient(135deg, ${warm.yellow} 0%, ${warm.orange} 100%)`,
+                                border: "2px solid white",
+                                boxShadow: "0 2px 6px rgba(0,0,0,0.15)"
+                              }}
+                            />
+                          </div>
                           <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center" }}>現在偏好：{preferenceText(richness)}</div>
                           <div className="mt-6 grid grid-cols-2 gap-3">
                             <button onClick={() => setSpeed("fast")} className="rounded-2xl px-3 py-3 text-sm transition-all overflow-hidden relative" style={{ border: `1px solid ${speed === "fast" ? "rgba(255,138,61,0.5)" : "rgba(255, 138, 61, 0.18)"}`, background: speed === "fast" ? "#FFF8F3" : "rgba(255,255,255,0.6)", fontWeight: 500, color: warm.text, textAlign: "center", boxShadow: speed === "fast" ? "inset 0 1px 4px rgba(255,138,61,0.1)" : "none" }}>快點</button>
@@ -750,7 +856,6 @@ export default function App() {
                         <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>出發去吃！ →</PrimaryButton>
                       </motion.div>
                     )}
-                    {/* 1. 修復：沒看到想吃的按鈕邊框 */}
                     <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
                       <div className="text-sm opacity-60 font-medium">還是沒看到想吃的？</div>
                       <div className="text-sm opacity-90"><span className="underline font-bold" style={{textUnderlineOffset: 3}}>在地圖搜尋「{mapsQuery}」</span></div>
@@ -772,7 +877,6 @@ export default function App() {
                 <motion.div key="log" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-0 h-[600px] flex flex-col">
                   <div className="px-6 pt-8 pb-2 flex items-end justify-between gap-3 shrink-0">
                     <div><div className="text-xl" style={{ fontWeight: 700, letterSpacing: "0.02em" }}>我的食力</div><div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>回顧每一次的美味選擇</div></div>
-                    {/* 2. 修復：清空按鈕邊框 */}
                     <button className="rounded-xl px-3 py-2 text-xs font-medium" style={{ border: warm.borderAction, background: "rgba(255,255,255,0.5)", color: warm.orange }} onClick={() => setLog([])} title="清空本機紀錄">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M3 6h18"></path>
@@ -783,29 +887,28 @@ export default function App() {
                   </div>
                   <div className="flex-1 overflow-y-auto relative px-6">
                     <div className="pt-4 pb-44 space-y-3">
-                      {log.length === 0 ? (
+                      {groupedLogs.length === 0 ? (
                         <div className="rounded-2xl p-6 mt-4 text-center" style={{ border: "1px dashed rgba(255,138,61,0.3)", background: "rgba(255,211,106,0.08)" }}>
                           <div className="text-base font-bold" style={{color: warm.text}}>還沒有食力</div><div className="mt-2 text-sm text-gray-500">這裡會記錄你所有的覓食歷程</div>
                         </div>
                       ) : (
-                        log.map((e, idx) => (
-                          <motion.button key={e.id} className="w-full rounded-3xl p-3.5 text-left transition flex items-center gap-4 group" style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.6)", boxShadow: warm.shadow }} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: Math.min(idx * 0.05, 0.3) }} whileTap={{ scale: 0.98 }} onClick={() => handleReEat(e)}>
-                            <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
-                              <EnergyCore mode={e.sig?.mode ?? "satisfied"} temp={e.sig?.temp} richness={e.sig?.richness ?? 0.5} size={88} />
-                            </div>
-                            <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1">
-                                <div className="text-xs mb-1 font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(e.at)}</div>
-                                <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(e.choiceText || "").replace("搜尋：", "")}</div>
-                                <div className="flex flex-wrap gap-1.5">{e.tags?.slice(0, 3).map((t) => (
-                                  <Tag key={t}>{t}</Tag>
-                                ))}</div>
-                            </div>
-                          </motion.button>
+                        groupedLogs.map((group) => (
+                          <div key={group.title} className="mb-6">
+                            <div className="text-xs font-bold mb-2 ml-1" style={{ color: warm.sub, letterSpacing: "0.05em" }}>{group.title}</div>
+                            {group.items.map((item) => (
+                              <SwipeableLogItem 
+                                key={item.id} 
+                                item={item} 
+                                onReEat={() => handleReEat(item)} 
+                                onPin={() => togglePin(item.id)}
+                                onDelete={() => deleteLog(item.id)}
+                              />
+                            ))}
+                          </div>
                         ))
                       )}
                     </div>
                   </div>
-                  {/* 3. 修復：底部間距問題，增加 pb-10 避免貼底 */}
                   <div className="absolute bottom-0 left-0 w-full px-6 pb-10 pt-12 space-y-5 pointer-events-none" style={{ background: "linear-gradient(to top, #FAF9F6 70%, rgba(250, 249, 246, 0.8) 85%, transparent 100%)" }}>
                     <div className="pointer-events-auto space-y-5"><PrimaryButton onClick={startDecision}>再覓食一次</PrimaryButton><PrimaryButton subtle onClick={goHome}>回首頁</PrimaryButton></div>
                   </div>
