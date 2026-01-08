@@ -9,7 +9,8 @@ const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.
 const DEFAULT_LOCATION = { lat: 25.0478, lng: 121.5170 };
 
 type Temp = "hot" | "cold";
-type Form = "soup" | "dry";
+// 修改：將 "湯/乾" (Form) 改為 "飢餓度" (Hunger)
+type Hunger = "full" | "snack"; // full=吃飽, snack=解饞
 type Speed = "fast" | "sit";
 type Style = "light" | "rich";
 
@@ -20,7 +21,7 @@ type Place = {
   name: string;
   type?: Temp;
   style?: Style;
-  form?: Form;
+  hunger?: Hunger; // 更新欄位
   speed?: Speed;
   price?: "budget" | "mid";
   queryKeyword?: string; 
@@ -44,7 +45,7 @@ type LogEntry = {
     warmth: number; 
     mode: "satisfied" | "stable" | "chaos";
     temp: Temp | null;
-    form: Form | null;
+    hunger: Hunger | null; // 更新欄位
     speed: Speed | null;
     richness: number;
   };
@@ -63,19 +64,9 @@ const warm = {
   sub: "#9C968F", 
   orange: "#FF9F5E",
   yellow: "#FFD97F",
-  
-  // 1. 徹底調整：完全移除灰色成分，改用不同濃度的橘色
-  // 選取狀態 / 重點邊框：較濃的橘色
   border: "1px solid rgba(255, 138, 61, 0.5)", 
-  
-  // 未選取 / 裝飾邊框：極淡的橘色 (不再是灰沙色)
-  // 讓它看起來像皮膚一樣自然
   borderSubtle: "1px solid rgba(255, 138, 61, 0.18)", 
-  
-  // 功能按鈕 (清空)：介於中間的橘色
   borderAction: "1px solid rgba(255, 138, 61, 0.35)",
-  
-  // 陰影：完全使用暖光
   shadow: "0 4px 12px -2px rgba(255, 159, 94, 0.1)",
   shadowActive: "0 6px 20px -4px rgba(255, 138, 61, 0.2)",
   highlight: "inset 0 1px 0 0 rgba(255, 255, 255, 0.6)",
@@ -113,12 +104,16 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
   return R * c; 
 }
 
-function computeTags(args: { temp: Temp | null; form: Form | null; richness: number; speed: Speed | null }) {
-  const { temp, form, richness, speed } = args;
+// 邏輯更新：計算標籤時使用 Hunger
+function computeTags(args: { temp: Temp | null; hunger: Hunger | null; richness: number; speed: Speed | null }) {
+  const { temp, hunger, richness, speed } = args;
   const style: Style = richness >= 0.55 ? "rich" : "light";
   const t: string[] = [];
+  
   if (temp) t.push(temp === "hot" ? "熱食" : "冷食");
-  if (form) t.push(form === "soup" ? "湯的" : "乾的");
+  // 更新標籤文字
+  if (hunger) t.push(hunger === "full" ? "吃飽" : "解饞");
+  
   t.push(style === "rich" ? "重口" : "清爽");
   if (speed) t.push(speed === "fast" ? "快點" : "坐下來吃");
   return { tags: t, style };
@@ -138,20 +133,16 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
-// 智慧導航函式：正式環境恢復直接跳轉
 function navigateToMap(url: string) {
-  // 如果是在 iframe (預覽環境) 中，為了不讓畫面掛掉，我們還是開新分頁
-  // 但在你的手機上，這行不會被觸發，而是執行下面的 window.location.href
   const isInIframe = window.self !== window.top;
-  
   if (isInIframe) {
     window.open(url, "_blank");
   } else {
-    // 手機/正式環境：直接跳轉，體驗最順暢
     window.location.href = url;
   }
 }
 
+// 邏輯更新：根據「吃飽/解饞」產生關鍵字
 function buildMapsQuery(tags: string[]) {
   const hour = new Date().getHours();
   const isMorning = hour >= 5 && hour < 11;
@@ -159,8 +150,8 @@ function buildMapsQuery(tags: string[]) {
   const isLateNight = hour >= 21 || hour < 5;
 
   const hasCold = tags.includes("冷食");
-  const hasSoup = tags.includes("湯的");
-  const hasDry = tags.includes("乾的");
+  const hasFull = tags.includes("吃飽");
+  const hasSnack = tags.includes("解饞");
   const hasRich = tags.includes("重口");
   const hasLight = tags.includes("清爽");
   const hasFast = tags.includes("快點");
@@ -171,34 +162,33 @@ function buildMapsQuery(tags: string[]) {
 
   let categories: string[] = [];
 
-  if (isMorning) {
-    categories.push("早餐", "早午餐", "飯糰", "三明治", "蛋餅", "粥");
-    if (hasSoup) categories.push("鹹粥", "米粉湯");
-  } else if (isAfternoon) {
-    categories.push("下午茶", "點心", "咖啡廳", "甜點", "雞蛋糕", "鬆餅");
-  } else if (isLateNight) {
-    categories.push("宵夜", "清粥小菜", "永和豆漿", "鹽酥雞", "串燒", "居酒屋", "深夜食堂");
+  // 1. 先根據「吃飽 vs 解饞」決定大方向
+  if (hasFull) {
+      // 吃飽：正餐類
+      if (isMorning) {
+          categories.push("早午餐", "飯糰", "鹹粥", "蛋餅", "早餐店");
+      } else {
+          categories.push("便當", "丼飯", "拉麵", "牛肉麵", "火鍋", "咖哩", "鐵板燒", "義大利麵", "合菜", "簡餐");
+          if (hasRich) categories.push("麻辣鍋", "燒肉", "熱炒", "川菜", "韓式料理", "泰式料理");
+          if (hasLight) categories.push("健康餐盒", "壽司", "越南河粉", "烏龍麵", "素食", "定食");
+      }
+  } else if (hasSnack) {
+      // 解饞：小吃、點心類
+      categories.push("鹹酥雞", "滷味", "車輪餅", "雞蛋糕", "章魚燒", "蔥油餅", "地瓜球", "炸雞", "串燒");
+      if (hasCold) categories.push("豆花", "剉冰", "手搖飲", "甜點", "蛋糕");
+      if (isAfternoon) categories.push("下午茶", "鬆餅", "咖啡廳", "麵包店");
+      if (isLateNight) categories.push("宵夜", "永和豆漿", "鹽水雞", "串燒");
+  } else {
+      // 如果沒選 (理論上不會發生，或是隨機模式)，混合推薦
+      categories = ["美食", "小吃", "餐廳"];
   }
 
-  if (hasRich) {
-    categories.push("美式漢堡", "韓式料理", "泰式料理", "燒肉", "咖哩", "麻辣鍋", "熱炒", "川菜");
-    if (hasSoup) categories.push("拉麵", "牛肉麵", "火鍋", "燉湯", "壽喜燒");
-    if (hasDry) categories.push("丼飯", "炸雞", "鐵板燒", "燒臘", "滷肉飯");
-  } 
-  
-  if (hasLight) {
-    categories.push("日式定食", "越南料理", "早午餐", "海鮮", "素食", "健康餐盒");
-    if (hasSoup) categories.push("烏龍麵", "魚湯", "粥", "關東煮", "茶泡飯");
-    if (hasDry) categories.push("壽司", "輕食", "蕎麥麵", "涼麵");
+  // 2. 根據其他屬性微調 (如果類別還很少)
+  if (categories.length < 3) {
+      if (hasCold) categories.push("涼麵", "沙拉", "生魚片", "壽司");
+      if (hasSit) categories.push("餐廳", "居酒屋", "餐酒館");
+      if (hasFast) categories.push("小吃", "速食");
   }
-  if (hasCold) {
-    categories = ["壽司", "沙拉", "涼麵", "波奇碗", "生魚片", "冷滷味", "泰式涼拌"]; 
-  }
-
-  if (hasFast) categories.push("便當", "小吃", "速食", "麵線", "水煎包");
-  if (hasSit) categories.push("餐廳", "居酒屋", "餐酒館", "牛排", "義大利麵", "合菜");
-
-  if (categories.length === 0) categories = ["美食", "餐廳", "小吃", "早午餐"];
 
   const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
   return Math.random() > 0.3 ? `${randomPrefix} ${selectedCategory}` : selectedCategory;
@@ -230,7 +220,6 @@ function Tag({ children }: { children: React.ReactNode }) {
       style={{
         background: "rgba(255, 211, 106, 0.15)", 
         color: "#6B5D52",
-        // 標籤邊框也全面暖化
         border: "1px solid rgba(255, 138, 61, 0.2)", 
         fontWeight: 500,
       }}
@@ -246,12 +235,11 @@ function PillButton({ active, children, onClick }: { active: boolean; children: 
       onClick={onClick}
       className="w-full rounded-2xl px-4 py-4 text-left transition-all duration-300 relative overflow-hidden group"
       style={{
-        // 邊框邏輯：都是橘色系，只有深淺差別
         border: active ? warm.border : warm.borderSubtle,
         background: active ? "#FFF8F3" : "rgba(255, 255, 255, 0.65)",
         boxShadow: active 
             ? `inset 0 1px 3px rgba(255,138,61,0.06), 0 2px 8px rgba(255,138,61,0.08)` 
-            : "0 2px 6px rgba(255, 138, 61, 0.05)", // 陰影也是暖的
+            : "0 2px 6px rgba(255, 138, 61, 0.05)",
       }}
     >
       <div className="relative z-10 text-base flex items-center justify-center gap-2" style={{ color: active ? warm.orange : warm.text, fontWeight: active ? 600 : 500, letterSpacing: "0.03em" }}>
@@ -286,7 +274,7 @@ function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longP
     background: "rgba(255, 255, 255, 0.7)",
     color: warm.text,
     border: warm.borderSubtle, 
-    boxShadow: "0 2px 12px rgba(255, 138, 61, 0.08)", // 暖色陰影
+    boxShadow: "0 2px 12px rgba(255, 138, 61, 0.08)",
   };
 
   return (
@@ -394,7 +382,8 @@ export default function App() {
   const totalChooseSteps = 3;
 
   const [temp, setTemp] = useState<Temp | null>(null);
-  const [form, setForm] = useState<Form | null>(null);
+  // 更新 State：使用 hunger 替代 form
+  const [hunger, setHunger] = useState<Hunger | null>(null);
   const [richness, setRichness] = useState(0.5);
   const [speed, setSpeed] = useState<Speed | null>(null);
 
@@ -409,7 +398,7 @@ export default function App() {
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   
-  const derived = useMemo(() => computeTags({ temp, form, richness, speed }), [temp, form, richness, speed]);
+  const derived = useMemo(() => computeTags({ temp, hunger, richness, speed }), [temp, hunger, richness, speed]);
   const tags = derived.tags;
   const style = derived.style;
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
@@ -446,7 +435,7 @@ export default function App() {
         if (Array.isArray(data)) {
           const placesWithDist = data.map((p: any) => {
              const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat, p.lng);
-             return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, form: form, speed: speed };
+             return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
           });
           setRealPlaces(placesWithDist);
         }
@@ -454,7 +443,7 @@ export default function App() {
       .catch(err => setApiError(`API Error: ${err.message}`))
       .finally(() => setIsRealLoading(false));
     }
-  }, [screen, userLocation, mapsQuery, temp, form, richness, speed]);
+  }, [screen, userLocation, mapsQuery, temp, hunger, richness, speed]);
 
   const filteredPlaces = useMemo(() => {
     if (!BACKEND_API_URL || realPlaces.length === 0) return [];
@@ -463,7 +452,7 @@ export default function App() {
       let score = 0;
       if (p.type === temp) score += 4; 
       if (p.style === style) score += 3;
-      if (p.form === form) score += 2;
+      if (p.hunger === hunger) score += 2;
       if (p.speed === speed) score += 1;
       return { place: p, score: score };
     });
@@ -474,12 +463,12 @@ export default function App() {
     finalPool.sort((a, b) => (a.place.distanceVal ?? 9999) - (b.place.distanceVal ?? 9999));
     
     return finalPool.slice(0, 20).map(s => s.place);
-  }, [temp, form, speed, style, realPlaces]);
+  }, [temp, hunger, speed, style, realPlaces]);
 
   const visiblePlaces = useMemo(() => filteredPlaces.slice(0, VISIBLE_COUNT), [filteredPlaces]);
 
   function resetFlow() {
-    setChooseStep(0); setTemp(null); setForm(null); setRichness(0.5); setSpeed(null);
+    setChooseStep(0); setTemp(null); setHunger(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
@@ -503,7 +492,7 @@ export default function App() {
 
   function randomizeAll() {
     setTemp(Math.random() > 0.5 ? "hot" : "cold");
-    setForm(Math.random() > 0.5 ? "soup" : "dry");
+    setHunger(Math.random() > 0.5 ? "full" : "snack"); // 更新隨機邏輯
     setSpeed(Math.random() > 0.5 ? "fast" : "sit");
     setRichness(Math.random());
   }
@@ -523,7 +512,7 @@ export default function App() {
       tags,
       choiceText: choiceText || "",
       isCategory, 
-      sig: { warmth: clamp(0.35 + richness * 0.65, 0, 1), mode: "satisfied", temp, form, speed, richness },
+      sig: { warmth: clamp(0.35 + richness * 0.65, 0, 1), mode: "satisfied", temp, hunger, speed, richness },
     };
     setLog((prev) => [entry, ...prev]);
   }
@@ -533,7 +522,6 @@ export default function App() {
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     const url = getGoogleMapsUrl(name, placeId); 
     
-    // 立即記錄並跳轉，不等待 (手機體驗優先)
     saveEnergy(name, false); 
     setScreen("energy");
     navigateToMap(url);
@@ -672,9 +660,10 @@ export default function App() {
                     )}
                     {chooseStep === 1 && (
                       <>
-                        <PillButton active={form === "soup"} onClick={() => setForm("soup")}>湯的</PillButton>
-                        <PillButton active={form === "dry"} onClick={() => setForm("dry")}>乾的</PillButton>
-                        <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!form}>下一步</PrimaryButton></div>
+                        {/* 修改步驟2：吃飽 vs 解饞 */}
+                        <PillButton active={hunger === "full"} onClick={() => setHunger("full")}>吃飽</PillButton>
+                        <PillButton active={hunger === "snack"} onClick={() => setHunger("snack")}>解饞</PillButton>
+                        <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!hunger}>下一步</PrimaryButton></div>
                       </>
                     )}
                     {chooseStep === 2 && (
