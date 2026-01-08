@@ -235,12 +235,12 @@ function useLocalStorageLog() {
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="inline-flex items-center rounded-full px-2.5 py-1 text-[13px] tracking-wide whitespace-nowrap flex-shrink-0" 
+      // 優化：text-[11px] 縮小字體, px-2 py-0.5 緊湊內距, whitespace-nowrap 不斷行
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tracking-wide whitespace-nowrap"
       style={{
         background: "rgba(255, 211, 106, 0.15)", 
         color: "#6B5D52",
         border: "1px solid rgba(255, 138, 61, 0.2)", 
-        fontWeight: 500,
       }}
     >
       {children}
@@ -248,7 +248,6 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-// 支援左右滑動的清單項目元件
 function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void }) {
   const x = useMotionValue(0);
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
@@ -256,12 +255,10 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
 
   return (
     <div className="relative mb-3 group">
-      {/* 背景層：顯示操作提示 (修改為 SVG 圖示) */}
       <motion.div 
         className="absolute inset-0 rounded-3xl flex items-center justify-between px-6"
         style={{ background }}
       >
-        {/* 左側內容 (右滑時顯示 - 釘選) */}
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
              <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
@@ -269,7 +266,6 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
            <span className="font-bold text-sm">釘選</span>
         </div>
 
-        {/* 右側內容 (左滑時顯示 - 刪除) */}
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
            <span className="font-bold text-sm">刪除</span>
            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -280,7 +276,6 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         </div>
       </motion.div>
 
-      {/* 前景層：可滑動的卡片 */}
       <motion.div
         className="relative w-full bg-white rounded-3xl p-3.5 text-left flex items-center gap-4 cursor-grab active:cursor-grabbing"
         style={{ x, border: warm.borderSubtle, background: "#FFFFFF", boxShadow: warm.shadow }}
@@ -290,20 +285,16 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         onDragStart={() => setIsDragging(true)}
         onDragEnd={(_, { offset }) => {
           setIsDragging(false);
-          // 縮短觸發距離至 60px
           if (offset.x < -60) {
-            // 刪除防呆
             if (window.confirm("確定要刪除這筆紀錄嗎？")) {
                 onDelete();
             }
           } else if (offset.x > 60) {
-            // 修正：補回「取消釘選」的防呆判斷
             if (item.isPinned) {
                  if (window.confirm("確定要取消這筆紀錄的釘選嗎？")) {
                      onPin();
                  }
             } else {
-                 // 一般釘選直接執行
                  onPin();
             }
           }
@@ -318,7 +309,6 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
             <div className="flex justify-between items-center mb-1">
                 <div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>
-                {/* 修改：已釘選標示改為實心橘色圖釘 */}
                 {item.isPinned && (
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={warm.orange} stroke="none">
                         <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
@@ -327,8 +317,8 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
             
-            {/* 標籤容器：使用 flex-wrap 讓標籤自動換行，移除捲動功能 */}
-            <div className="flex flex-wrap gap-1.5 w-full">
+            {/* 優化：flex-wrap 允許換行，gap-1 縮小間距，確保整齊 */}
+            <div className="flex flex-wrap gap-1 w-full">
                 {item.tags?.slice(0, 3).map((t) => (
                   <Tag key={t}>{t}</Tag>
                 ))}
@@ -760,6 +750,7 @@ export default function App() {
                     <button onMouseDown={handlePressDown} onMouseUp={handlePressUp} onMouseLeave={handlePressUp} onTouchStart={handlePressDown} onTouchEnd={handlePressUp} className="w-full rounded-2xl px-4 py-4 transition overflow-hidden relative" style={{ border: warm.border, background: pressing ? "linear-gradient(135deg, rgba(255,138,61,0.18) 0%, rgba(255,211,106,0.22) 100%)" : "rgba(255,255,255,0.75)", boxShadow: pressing ? warm.shadowActive : warm.shadow }}>
                       <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>沒想法</div>
                       <div className="relative z-10 mt-1 text-sm" style={{ color: warm.sub, textAlign: "center" }}>長按一下，隨緣覓食</div>
+                       {/* 增加流光質感 */}
                        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
                     </button>
                   </div>
