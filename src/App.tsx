@@ -248,6 +248,7 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
+// 支援左右滑動的清單項目元件
 function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void }) {
   const x = useMotionValue(0);
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
@@ -255,10 +256,12 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
 
   return (
     <div className="relative mb-3 group">
+      {/* 背景層：顯示操作提示 (修改為 SVG 圖示) */}
       <motion.div 
         className="absolute inset-0 rounded-3xl flex items-center justify-between px-6"
         style={{ background }}
       >
+        {/* 左側內容 (右滑時顯示 - 釘選) */}
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
              <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
@@ -266,6 +269,7 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
            <span className="font-bold text-sm">釘選</span>
         </div>
 
+        {/* 右側內容 (左滑時顯示 - 刪除) */}
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
            <span className="font-bold text-sm">刪除</span>
            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -276,6 +280,7 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         </div>
       </motion.div>
 
+      {/* 前景層：可滑動的卡片 */}
       <motion.div
         className="relative w-full bg-white rounded-3xl p-3.5 text-left flex items-center gap-4 cursor-grab active:cursor-grabbing"
         style={{ x, border: warm.borderSubtle, background: "#FFFFFF", boxShadow: warm.shadow }}
@@ -285,12 +290,22 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         onDragStart={() => setIsDragging(true)}
         onDragEnd={(_, { offset }) => {
           setIsDragging(false);
+          // 縮短觸發距離至 60px
           if (offset.x < -60) {
+            // 刪除防呆
             if (window.confirm("確定要刪除這筆紀錄嗎？")) {
                 onDelete();
             }
           } else if (offset.x > 60) {
-            onPin();
+            // 修正：補回「取消釘選」的防呆判斷
+            if (item.isPinned) {
+                 if (window.confirm("確定要取消這筆紀錄的釘選嗎？")) {
+                     onPin();
+                 }
+            } else {
+                 // 一般釘選直接執行
+                 onPin();
+            }
           }
         }}
         onClick={() => {
@@ -303,6 +318,7 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
             <div className="flex justify-between items-center mb-1">
                 <div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>
+                {/* 修改：已釘選標示改為實心橘色圖釘 */}
                 {item.isPinned && (
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={warm.orange} stroke="none">
                         <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
@@ -311,6 +327,7 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
             
+            {/* 標籤容器：使用 flex-wrap 讓標籤自動換行，移除捲動功能 */}
             <div className="flex flex-wrap gap-1.5 w-full">
                 {item.tags?.slice(0, 3).map((t) => (
                   <Tag key={t}>{t}</Tag>
@@ -653,17 +670,12 @@ export default function App() {
 
     let targetPlace: Place | null = null;
     
-    // AI 推薦邏輯：優先推薦距離較近的隱藏名單
-    const hiddenCandidates = filteredPlaces.slice(VISIBLE_COUNT).filter(p => (p.distanceVal || 999) < 1.2);
+    const hiddenCandidates = filteredPlaces.slice(VISIBLE_COUNT);
 
     if (hiddenCandidates.length > 0) {
         targetPlace = hiddenCandidates[Math.floor(Math.random() * Math.min(5, hiddenCandidates.length))];
     } else if (filteredPlaces.length > 0) {
-        // 如果隱藏名單都太遠，回頭找可見清單裡近的
-        const nearbyPlaces = filteredPlaces.filter(p => (p.distanceVal || 999) < 1.2);
-        if (nearbyPlaces.length > 0) {
-             targetPlace = nearbyPlaces[Math.floor(Math.random() * nearbyPlaces.length)];
-        }
+        targetPlace = filteredPlaces[Math.floor(Math.random() * filteredPlaces.length)];
     }
 
     let prompt = "";
@@ -768,7 +780,6 @@ export default function App() {
                     )}
                     {chooseStep === 1 && (
                       <>
-                        {/* 修改步驟2：吃飽 vs 解饞 */}
                         <PillButton active={hunger === "full"} onClick={() => setHunger("full")}>吃飽</PillButton>
                         <PillButton active={hunger === "snack"} onClick={() => setHunger("snack")}>解饞</PillButton>
                         <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!hunger}>下一步</PrimaryButton></div>
@@ -776,8 +787,7 @@ export default function App() {
                     )}
                     {chooseStep === 2 && (
                       <>
-                        {/* 修正：清爽/重口區塊邊框改為 warm.border (與 AI 推薦一致) */}
-                        <div className="mt-2 rounded-2xl p-5" style={{ border: warm.border, background: "rgba(255,255,255,0.5)" }}>
+                        <div className="mt-2 rounded-2xl p-5" style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.5)" }}>
                           <div className="flex items-center justify-between"><span className="text-xs" style={{ color: warm.sub }}>清爽</span><span className="text-xs" style={{ color: warm.sub }}>重口</span></div>
                           {/* 美化拉條：客製化 Slider - 移除 transition-all 解決卡頓 */}
                           <div className="relative w-full h-6 mt-4 mb-2 flex items-center">
@@ -844,7 +854,6 @@ export default function App() {
                                 <div className="flex items-start justify-between gap-3 w-full">
                                     <div className="flex-1 min-w-0">
                                         <div className="text-base break-words" style={{ fontWeight: 700, color: warm.text, letterSpacing: "0.02em" }}>{p.name}</div>
-                                        {/* 修正：評價星星改為橘色 */}
                                         <div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>{p.distance} ・ <span style={{color: warm.orange}}>{p.rating ? `★${p.rating}` : '無評分'}</span></div>
                                     </div>
                                     <div className="h-9 w-9 flex-shrink-0 rounded-full flex items-center justify-center transition-colors group-hover:bg-orange-100" style={{ background: "rgba(255,138,61,0.1)", border: "1px solid rgba(255,138,61,0.2)" }}>
@@ -907,6 +916,7 @@ export default function App() {
                   </div>
                   <div className="flex-1 overflow-y-auto relative px-6">
                     <div className="pt-4 pb-44 space-y-3">
+                      {/* 新增：分組顯示 */}
                       {groupedLogs.length === 0 ? (
                         <div className="rounded-2xl p-6 mt-4 text-center" style={{ border: "1px dashed rgba(255,138,61,0.3)", background: "rgba(255,211,106,0.08)" }}>
                           <div className="text-base font-bold" style={{color: warm.text}}>還沒有食力</div><div className="mt-2 text-sm text-gray-500">這裡會記錄你所有的覓食歷程</div>
