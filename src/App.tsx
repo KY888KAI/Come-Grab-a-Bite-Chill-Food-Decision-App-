@@ -133,6 +133,7 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
+// 智慧導航函式
 function navigateToMap(url: string) {
   const isInIframe = window.self !== window.top;
   if (isInIframe) {
@@ -425,7 +426,13 @@ export default function App() {
       setIsRealLoading(true);
       setApiError(null);
       
-      const payload = { lat: userLocation.lat, lng: userLocation.lng, query: mapsQuery };
+      const payload = { 
+        lat: userLocation.lat, 
+        lng: userLocation.lng, 
+        query: mapsQuery,
+        language: navigator.language // 自動偵測瀏覽器語系傳給後端
+      };
+
       fetch(BACKEND_API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
       .then(async res => {
         if (!res.ok) throw new Error(await res.text());
