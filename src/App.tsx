@@ -68,7 +68,6 @@ const warm = {
   shadowActive: "0 6px 20px -4px rgba(255, 138, 61, 0.2)",
   highlight: "inset 0 1px 0 0 rgba(255, 255, 255, 0.6)",
   deleteRed: "#FF6B6B",
-  // 移除 pinGreen，改用 orange
 } as const;
 
 function clamp(n: number, a: number, b: number) {
@@ -88,7 +87,6 @@ function fmtDate(iso: string) {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-// 修改：僅回傳純文字標題，不帶 Emoji，改由 UI 渲染 SVG
 function groupLogsByDate(logs: LogEntry[]) {
   const groups: { title: string; type: 'pinned' | 'date'; items: LogEntry[] }[] = [];
   const pinned: LogEntry[] = [];
@@ -237,7 +235,7 @@ function useLocalStorageLog() {
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="inline-flex items-center rounded-full px-2.5 py-1 text-[13px] tracking-wide whitespace-nowrap flex-shrink-0" 
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-[12px] tracking-wide whitespace-nowrap" // 調整：更緊湊的 Padding
       style={{
         background: "rgba(255, 211, 106, 0.15)", 
         color: "#6B5D52",
@@ -292,12 +290,21 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         onDragStart={() => setIsDragging(true)}
         onDragEnd={(_, { offset }) => {
           setIsDragging(false);
+          // 優化：縮短觸發距離至 60px，讓操作更輕鬆
           if (offset.x < -60) {
+            // 刪除防呆
             if (window.confirm("確定要刪除這筆紀錄嗎？")) {
                 onDelete();
             }
           } else if (offset.x > 60) {
-            onPin();
+            // 取消釘選防呆
+            if (item.isPinned) {
+                 if (window.confirm("確定要取消這筆紀錄的釘選嗎？")) {
+                     onPin();
+                 }
+            } else {
+                 onPin();
+            }
           }
         }}
         onClick={() => {
@@ -310,7 +317,6 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
             <div className="flex justify-between items-center mb-1">
                 <div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>
-                {/* 修改：已釘選標示改為實心橘色圖釘 */}
                 {item.isPinned && (
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={warm.orange} stroke="none">
                         <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
@@ -319,12 +325,8 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
             
-            {/* 解決衝突：在標籤容器上阻止事件冒泡，讓它可以獨立左右滑動，不觸發卡片的拖曳 */}
-            <div 
-                className="flex flex-nowrap gap-1.5 overflow-x-auto no-scrollbar w-full pr-4" 
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                onPointerDown={(e) => e.stopPropagation()}
-            >
+            {/* 標籤容器：使用 flex-wrap 讓標籤自動換行，移除捲動功能 */}
+            <div className="flex flex-wrap gap-1.5 w-full">
                 {item.tags?.slice(0, 3).map((t) => (
                   <Tag key={t}>{t}</Tag>
                 ))}
@@ -785,6 +787,7 @@ export default function App() {
                       <>
                         <div className="mt-2 rounded-2xl p-5" style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.5)" }}>
                           <div className="flex items-center justify-between"><span className="text-xs" style={{ color: warm.sub }}>清爽</span><span className="text-xs" style={{ color: warm.sub }}>重口</span></div>
+                          {/* 美化拉條：客製化 Slider - 移除 transition-all 解決卡頓 */}
                           <div className="relative w-full h-6 mt-4 mb-2 flex items-center">
                             <div className="absolute w-full h-2 rounded-full overflow-hidden" style={{ background: "linear-gradient(90deg, #FAD961 0%, #F76B1C 100%)", opacity: 0.3 }}></div>
                             <input 
@@ -921,20 +924,20 @@ export default function App() {
                           <div key={group.title} className="mb-6">
                             <div className="flex items-center gap-2 mb-2 ml-1">
                                 {group.type === 'pinned' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <line x1="12" y1="17" x2="12" y2="22"></line>
                                       <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
                                     </svg>
                                 )}
                                 {group.type === 'date' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                                       <line x1="16" y1="2" x2="16" y2="6"></line>
                                       <line x1="8" y1="2" x2="8" y2="6"></line>
                                       <line x1="3" y1="10" x2="21" y2="10"></line>
                                     </svg>
                                 )}
-                                <span className="text-xs font-bold" style={{ color: warm.sub, letterSpacing: "0.05em" }}>{group.title}</span>
+                                <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
                             {group.items.map((item) => (
                               <SwipeableLogItem 
