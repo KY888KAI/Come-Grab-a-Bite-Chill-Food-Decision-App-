@@ -39,6 +39,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         textQuery: query || "餐廳",
+        languageCode: "zh-TW", // ★ 強制要求 Google 回傳繁體中文資料
         locationBias: {
           circle: {
             center: { latitude: lat, longitude: lng },
