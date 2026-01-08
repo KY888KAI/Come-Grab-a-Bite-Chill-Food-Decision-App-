@@ -138,12 +138,16 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
-// 智慧導航函式
+// 智慧導航函式：正式環境恢復直接跳轉
 function navigateToMap(url: string) {
+  // 如果是在 iframe (預覽環境) 中，為了不讓畫面掛掉，我們還是開新分頁
+  // 但在你的手機上，這行不會被觸發，而是執行下面的 window.location.href
   const isInIframe = window.self !== window.top;
+  
   if (isInIframe) {
     window.open(url, "_blank");
   } else {
+    // 手機/正式環境：直接跳轉，體驗最順暢
     window.location.href = url;
   }
 }
@@ -529,12 +533,10 @@ export default function App() {
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     const url = getGoogleMapsUrl(name, placeId); 
     
+    // 立即記錄並跳轉，不等待 (手機體驗優先)
     saveEnergy(name, false); 
     setScreen("energy");
-
-    setTimeout(() => {
-        navigateToMap(url);
-    }, 1500);
+    navigateToMap(url);
   }
 
   function handleSearchCategory() {
@@ -542,10 +544,7 @@ export default function App() {
     
     saveEnergy(`搜尋：${mapsQuery}`, true); 
     setScreen("energy"); 
-
-    setTimeout(() => {
-        navigateToMap(url);
-    }, 1500);
+    navigateToMap(url);
   }
 
   function handleReEat(entry: LogEntry) {
