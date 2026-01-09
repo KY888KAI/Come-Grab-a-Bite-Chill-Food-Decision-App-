@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useMotionValue, useTransform } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
 const LS_KEY = "whatnow_energy_log_v2"; 
 const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; 
@@ -143,7 +143,6 @@ function computeTags(args: { temp: Temp | null; hunger: Hunger | null; richness:
   if (temp) t.push(temp === "hot" ? "熱食" : "冷食");
   if (hunger) t.push(hunger === "full" ? "吃飽" : "解饞");
   t.push(style === "rich" ? "重口" : "清爽");
-  // 文案優化：將標籤顯示改為更直覺的描述
   if (speed) t.push(speed === "fast" ? "方便吃" : "慢慢吃");
   return { tags: t, style };
 }
@@ -171,50 +170,10 @@ function navigateToMap(url: string) {
   }
 }
 
+// 移除舊的 hardcoded buildMapsQuery，改用 AI 邏輯
 function buildMapsQuery(tags: string[]) {
-  const hour = new Date().getHours();
-  const isMorning = hour >= 5 && hour < 11;
-  const isAfternoon = hour >= 14 && hour < 17;
-  const isLateNight = hour >= 21 || hour < 5;
-
-  const hasCold = tags.includes("冷食");
-  const hasFull = tags.includes("吃飽");
-  const hasSnack = tags.includes("解饞");
-  const hasRich = tags.includes("重口");
-  const hasLight = tags.includes("清爽");
-  const hasFast = tags.includes("快點");
-  const hasSit = tags.includes("坐下來吃");
-
-  const prefixes = ["人氣", "在地", "必吃", "評價高", "隱藏版", "老字號", "平價", "排隊", "道地", "TOP"];
-  const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-
-  let categories: string[] = [];
-
-  if (hasFull) {
-      if (isMorning) {
-          categories.push("早午餐", "飯糰", "鹹粥", "蛋餅", "早餐店");
-      } else {
-          categories.push("便當", "丼飯", "拉麵", "牛肉麵", "火鍋", "咖哩", "鐵板燒", "義大利麵", "合菜", "簡餐");
-          if (hasRich) categories.push("麻辣鍋", "燒肉", "熱炒", "川菜", "韓式料理", "泰式料理");
-          if (hasLight) categories.push("健康餐盒", "壽司", "越南河粉", "烏龍麵", "素食", "定食");
-      }
-  } else if (hasSnack) {
-      categories.push("鹹酥雞", "滷味", "車輪餅", "雞蛋糕", "章魚燒", "蔥油餅", "地瓜球", "炸雞", "串燒");
-      if (hasCold) categories.push("豆花", "剉冰", "手搖飲", "甜點", "蛋糕");
-      if (isAfternoon) categories.push("下午茶", "鬆餅", "咖啡廳", "麵包店");
-      if (isLateNight) categories.push("宵夜", "永和豆漿", "鹽水雞", "串燒");
-  } else {
-      categories = ["美食", "小吃", "餐廳"];
-  }
-
-  if (categories.length < 3) {
-      if (hasCold) categories.push("涼麵", "沙拉", "生魚片", "壽司");
-      if (hasSit) categories.push("餐廳", "居酒屋", "餐酒館");
-      if (hasFast) categories.push("小吃", "速食");
-  }
-
-  const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
-  return Math.random() > 0.3 ? `${randomPrefix} ${selectedCategory}` : selectedCategory;
+    // 這裡保留一個簡單版本作為 fallback，或者僅用於產生 tags 字串
+    return tags.join(" ");
 }
 
 function useLocalStorageLog() {
@@ -249,10 +208,40 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void }) {
+// 修正 1: 補回 tease 和 onTeaseComplete 的定義，解決 TS2322 錯誤
+function SwipeableLogItem({ 
+    item, 
+    onReEat, 
+    onPin, 
+    onDelete, 
+    tease = false, 
+    onTeaseComplete 
+}: { 
+    item: LogEntry; 
+    onReEat: () => void; 
+    onPin: () => void; 
+    onDelete: () => void; 
+    tease?: boolean; 
+    onTeaseComplete?: () => void 
+}) {
   const x = useMotionValue(0);
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
   const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (tease) {
+        const controls = animate(x, [0, -60, -60, 0, 60, 60, 0], {
+            duration: 2.2,
+            ease: "easeInOut",
+            delay: 0.8, 
+            times: [0, 0.2, 0.35, 0.5, 0.65, 0.8, 1],
+            onComplete: () => {
+                if (onTeaseComplete) onTeaseComplete();
+            }
+        });
+        return () => controls.stop();
+    }
+  }, [tease, x, onTeaseComplete]);
 
   return (
     <div className="relative mb-3 group">
@@ -354,8 +343,7 @@ function PillButton({ active, children, onClick }: { active: boolean; children: 
   );
 }
 
-// 修正：移除未使用的 disabled, onLongPress 等參數
-function PrimaryButton({ children, onClick, disabled, subtle }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; subtle?: boolean; }) {
+function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longPressMs = 650 }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; subtle?: boolean; onLongPress?: () => void; longPressMs?: number; }) {
   const solidStyle = {
     background: `linear-gradient(180deg, #FFB17A 0%, ${warm.orange} 100%)`,
     color: "#FFF",
@@ -365,10 +353,10 @@ function PrimaryButton({ children, onClick, disabled, subtle }: { children: Reac
   };
 
   const subtleStyle = {
-    background: "rgba(255, 255, 255, 0.7)",
-    color: warm.text,
-    border: warm.borderSubtle, 
-    boxShadow: "0 2px 12px rgba(255, 138, 61, 0.08)",
+    background: "transparent",
+    color: warm.sub,
+    border: "1px solid rgba(156, 150, 143, 0.3)",
+    boxShadow: "none",
   };
 
   return (
@@ -389,7 +377,6 @@ function PrimaryButton({ children, onClick, disabled, subtle }: { children: Reac
   );
 }
 
-// 5. 新增：onHome 按鈕功能
 function TopBar({ title, onBack, onOpenLog, showBack, showLog, onHome }: { title: string; onBack: () => void; onOpenLog: () => void; showBack: boolean; showLog: boolean; onHome?: () => void }) {
   return (
     <div className="flex items-center justify-between gap-3 px-4 pt-6 pb-4 relative">
@@ -408,19 +395,18 @@ function TopBar({ title, onBack, onOpenLog, showBack, showLog, onHome }: { title
         >
           ← 返回
         </button>
-        {/* 全域回首頁按鈕 */}
         {onHome && (
-            <button 
-                onClick={onHome}
-                className="rounded-xl p-2 transition-all active:scale-95 hover:bg-white/50"
-                style={{ color: warm.sub }}
-                title="回到首頁"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                    <polyline points="9 22 9 12 15 12 15 22"/>
-                </svg>
-            </button>
+          <button 
+            className="rounded-xl p-2 transition-all active:scale-95 hover:bg-white/50"
+            onClick={onHome}
+            style={{ color: warm.sub }}
+            title="回到首頁"
+          >
+             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+               <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+               <polyline points="9 22 9 12 15 12 15 22"/>
+             </svg>
+          </button>
         )}
       </div>
       
@@ -449,24 +435,23 @@ function TopBar({ title, onBack, onOpenLog, showBack, showLog, onHome }: { title
   );
 }
 
+// 修正 2: 移除 statusText 參數，解決 TS6133 錯誤
 function EnergyCore({ 
   mode = "stable", 
   temp = null, 
   richness = 0.5, 
   size = 220, 
-  imageUrl = null,
-  statusText = null 
+  imageUrl = null 
 }: { 
   mode?: "chaos" | "stable" | "satisfied"; 
   temp?: Temp | null; 
   richness?: number; 
   size?: number; 
   imageUrl?: string | null;
-  statusText?: string | null;
 }) {
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
-  // 修正：移除 jitter 變數，因為 SVG 版本不再使用
+  const jitter = mode === "chaos" ? 6 : 0;
   
   const palette = useMemo(() => {
     if (temp === "hot") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," };
@@ -509,7 +494,7 @@ function EnergyCore({
                     className="absolute inset-6 rounded-[42%]" 
                     animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }} 
                     transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }} 
-                    style={{ background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)` }} 
+                    style={{ background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)`, transform: `translate(${jitter}px, ${-jitter}px)` }} 
                 />
                 <motion.div 
                     key="mist-shape"
@@ -604,10 +589,8 @@ export default function App() {
   const tags = derived.tags;
   const style = derived.style;
   
-  // 6. 新增狀態：Gemini 產生的搜尋關鍵字 (加上 mapsQuery 變數定義)
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
   const [geminiQueryKeyword, setGeminiQueryKeyword] = useState<string | null>(null);
-  // 顯示用：AI 大廚分析狀態
   const [isChefAnalysing, setIsChefAnalysing] = useState(false);
 
   const groupedLogs = useMemo(() => groupLogsByDate(log), [log]);
@@ -628,7 +611,6 @@ export default function App() {
       return null;
   }, [screen, realPlaces, log]);
 
-  // AI 生圖邏輯
   useEffect(() => {
     if (!targetKeyword || targetKeyword === lastGenKeyword.current) return;
     if (!BACKEND_IMAGE_GEN_URL) return;
@@ -669,7 +651,6 @@ export default function App() {
     }
   }, []);
 
-  // 6. 核心修改：在進入 recommend 前，先用 Gemini 翻譯標籤
   useEffect(() => {
     if (screen === "recommend" && userLocation) {
         if (!BACKEND_API_URL) return;
@@ -677,7 +658,6 @@ export default function App() {
         setApiError(null);
         setCurrentAiImage(null);
         
-        // 呼叫 Gemini 取得精準關鍵字 (包含手動與隨機模式)
         if (tags.length > 0) {
             setIsChefAnalysing(true);
             const prompt = `
@@ -698,12 +678,12 @@ export default function App() {
                 if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
                     bestKeyword = data.candidates[0].content.parts[0].text.trim();
                 }
-                setGeminiQueryKeyword(bestKeyword); // 存起來顯示給使用者看
+                setGeminiQueryKeyword(bestKeyword); 
                 doFetchPlaces(bestKeyword);
             })
             .catch(e => {
                 console.warn("Gemini Search Error", e);
-                doFetchPlaces("美食"); // 降級處理
+                doFetchPlaces("美食"); 
             })
             .finally(() => setIsChefAnalysing(false));
         } else {
@@ -712,7 +692,6 @@ export default function App() {
     }
   }, [screen, userLocation, isRandomMode]); 
 
-  // 抽離出 Fetch Places 邏輯
   const doFetchPlaces = (query: string) => {
       if (!userLocation) return;
       
