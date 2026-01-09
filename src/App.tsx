@@ -55,28 +55,6 @@ type AiSuggestion = {
   targetPlace?: Place;
 } | null;
 
-const MORPH_SHAPES = {
-  circle: "M50,5 A45,45 0 1,1 49.9,5 Z",
-  bowl: "M15,45 Q50,55 85,45 L85,50 Q85,90 50,90 Q15,90 15,50 Z M20,40 Q50,50 80,40 Q50,30 20,40",
-  burger: "M20,50 Q50,10 80,50 L80,55 Q80,60 20,55 Z M20,65 Q50,70 80,65 L80,75 Q80,85 20,85 L20,75",
-  drink: "M30,20 L32,80 Q50,90 68,80 L70,20 Z M40,20 L55,5",
-  triangle: "M50,10 Q85,80 80,85 Q50,95 20,85 Q15,80 50,10 Z",
-  cloud: "M20,60 Q10,40 30,30 Q40,10 60,30 Q90,30 80,60 Q90,80 60,80 Q30,90 20,60 Z"
-};
-
-type ShapeType = keyof typeof MORPH_SHAPES;
-
-function getShapeFromKeywords(text: string): ShapeType {
-  if (!text) return "circle";
-  const t = text.toLowerCase();
-  if (t.match(/麵|飯|粥|丼|湯|鍋|羹/)) return "bowl";
-  if (t.match(/堡|三明治|吐司|麥當勞|肯德基|炸雞/)) return "burger";
-  if (t.match(/茶|咖啡|豆漿|飲|酒|冰|水/)) return "drink";
-  if (t.match(/披薩|飯糰|壽司|蛋糕|甜點/)) return "triangle";
-  if (t.match(/沙拉|輕食|健康|素/)) return "cloud";
-  return "circle";
-}
-
 const warm = {
   bg: "#FAF9F6", 
   text: "#595048", 
@@ -470,21 +448,10 @@ function TopBar({ title, onBack, onOpenLog, showBack, showLog }: { title: string
   );
 }
 
-function EnergyCore({ 
-  mode = "stable", 
-  temp = null, 
-  richness = 0.5, 
-  size = 220, 
-  shape = "circle" 
-}: { 
-  mode?: "chaos" | "stable" | "satisfied"; 
-  temp?: Temp | null; 
-  richness?: number; 
-  size?: number; 
-  shape?: ShapeType;
-}) {
+function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }: { mode?: "chaos" | "stable" | "satisfied"; temp?: Temp | null; richness?: number; size?: number; }) {
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
+  const jitter = mode === "chaos" ? 6 : 0;
   
   const palette = useMemo(() => {
     if (temp === "hot") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," };
@@ -498,42 +465,10 @@ function EnergyCore({
   const glowOpacity = isDefault ? 0.2 : 0.1 + richness * 0.15;
   const dur = mode === "chaos" ? 1.4 : mode === "stable" ? 2.6 : 3.2;
 
-  const currentPath = MORPH_SHAPES[shape] || MORPH_SHAPES.circle;
-
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+    <div className="relative" style={{ width: size, height: size }}>
       <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
-      <motion.svg 
-        viewBox="0 0 100 100" 
-        className="absolute inset-6 w-[70%] h-[70%]"
-        style={{ overflow: 'visible' }}
-        animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }}
-        transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <defs>
-          <radialGradient id="coreGradient" cx="30%" cy="30%" r="70%">
-            <stop offset="0%" stopColor={`${palette.b}0.9)`} />
-            <stop offset="45%" stopColor={`${palette.a}${coreOpacity})`} />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </radialGradient>
-          <filter id="glowFilter" x="-50%" y="-50%" width="200%" height="200%">
-             <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
-             <feMerge>
-                 <feMergeNode in="coloredBlur"/>
-                 <feMergeNode in="SourceGraphic"/>
-             </feMerge>
-          </filter>
-        </defs>
-        <motion.path 
-          d={currentPath}
-          fill="url(#coreGradient)"
-          stroke="none"
-          filter="url(#glowFilter)"
-          initial={false}
-          animate={{ d: currentPath }}
-          transition={{ duration: 1.2, ease: "easeInOut" }} 
-        />
-      </motion.svg>
+      <motion.div className="absolute inset-6 rounded-[42%]" animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }} transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }} style={{ background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)`, transform: `translate(${jitter}px, ${-jitter}px)` }} />
       <motion.div className="absolute inset-10 rounded-[48%]" animate={mode === "chaos" ? { opacity: [0.25, 0.6, 0.35, 0.7, 0.25], x: [0, 2, -2, 1, 0], y: [0, -1, 2, -2, 0] } : { opacity: [0.35, 0.55, 0.35] }} transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} style={{ background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} />
       <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
     </div>
@@ -606,63 +541,6 @@ export default function App() {
   const groupedLogs = useMemo(() => groupLogsByDate(log), [log]);
 
   const VISIBLE_COUNT = 3;
-
-  const [aiShapeType, setAiShapeType] = useState<ShapeType>("circle");
-  const lastGeneratedKeyword = useRef<string | null>(null);
-
-  const targetKeyword = useMemo(() => {
-      if (screen === "recommend" && realPlaces.length > 0) {
-          return realPlaces.slice(0, 3).map(p => p.name).join("、"); 
-      }
-      if (screen === "home" && log.length > 0) {
-          return log[0].choiceText.replace("搜尋：", "");
-      }
-      return null;
-  }, [screen, realPlaces, log]);
-
-  useEffect(() => {
-      if (!targetKeyword || targetKeyword === lastGeneratedKeyword.current) return;
-      lastGeneratedKeyword.current = targetKeyword;
-
-      const fallbackShape = getShapeFromKeywords(targetKeyword);
-      setAiShapeType(fallbackShape);
-
-      if (!BACKEND_GEMINI_URL) return;
-
-      const shapePrompt = `
-        任務：請判斷以下食物關鍵字最適合用哪種形狀代表？
-        關鍵字：「${targetKeyword}」
-        
-        請從以下選項中選出最合適的一個 (只回傳英文單字)：
-        - bowl (適合：麵、飯、湯、碗裝食物)
-        - burger (適合：漢堡、三明治、麵包、刈包)
-        - drink (適合：飲料、酒、冰品、直立容器)
-        - triangle (適合：披薩、飯糰、蛋糕、甜點、三角形食物)
-        - cloud (適合：沙拉、輕食、蔬菜、不規則食物)
-        - circle (其他、無法判斷)
-      `;
-
-      fetch(BACKEND_GEMINI_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: shapePrompt })
-      })
-      .then(res => res.json())
-      .then(data => {
-          let aiChoice = "";
-          if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-              aiChoice = data.candidates[0].content.parts[0].text.trim().toLowerCase();
-              aiChoice = aiChoice.replace(/[^a-z]/g, "");
-          }
-          
-          if (aiChoice && MORPH_SHAPES[aiChoice as ShapeType]) {
-              setAiShapeType(aiChoice as ShapeType);
-          }
-      })
-      .catch(e => console.warn("AI Shape Check Error", e));
-
-  }, [targetKeyword]);
-
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -928,7 +806,7 @@ export default function App() {
                   <div className="text-2xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>來覓食</div>
                   <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center", fontWeight: 400 }}>佛系覓食，點幾下就知道要吃什麼</div>
                   <div className="mt-8 flex flex-col items-center justify-center">
-                    {log.length > 0 && log[0] ? <EnergyCore mode={log[0].sig?.mode ?? "chaos"} temp={log[0].sig?.temp} richness={log[0].sig?.richness ?? 0.5} size={220} shape={aiShapeType} /> : <EnergyCore mode="chaos" richness={0.5} size={220} shape={aiShapeType} />}
+                    {log.length > 0 && log[0] ? <EnergyCore mode={log[0].sig?.mode ?? "chaos"} temp={log[0].sig?.temp} richness={log[0].sig?.richness ?? 0.5} size={220} /> : <EnergyCore mode="chaos" richness={0.5} size={220} />}
                   </div>
                   {log.length > 0 && log[0] && (
                     <div className="mt-4 flex justify-center w-full px-8">
@@ -1010,7 +888,7 @@ export default function App() {
                 <motion.div key="recommend" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
                   <div className="text-xl mt-4 text-center font-bold" style={{color: warm.text}}>附近可以吃什麼</div>
                   <div className="flex flex-col items-center justify-center mb-6">
-                    <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} shape={aiShapeType} />
+                    <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} />
                     <div className="mt-4 flex flex-wrap gap-2 justify-center">{tags.map((t) => (<Tag key={t}>{t}</Tag>))}</div>
                   </div>
                   
@@ -1084,7 +962,7 @@ export default function App() {
                 <motion.div key="energy" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
                   <div className="text-xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>留下這次的食力</div>
                   <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center" }}>剛剛的選擇已自動紀錄。<br/>祝你用餐愉快！</div>
-                  <div className="mt-8 flex items-center justify-center"><EnergyCore mode="satisfied" temp={temp} richness={richness} size={240} shape={aiShapeType} /></div>
+                  <div className="mt-8 flex items-center justify-center"><EnergyCore mode="satisfied" temp={temp} richness={richness} size={240} /></div>
                   <div className="mt-8 space-y-5"><PrimaryButton onClick={() => setScreen("log")}>看我的食力</PrimaryButton><PrimaryButton subtle onClick={goHome}>回到首頁</PrimaryButton></div>
                 </motion.div>
               )}
@@ -1168,3 +1046,5 @@ export default function App() {
     </div>
   );
 }
+
+
