@@ -3,10 +3,10 @@ import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "
 
 const LS_KEY = "whatnow_energy_log_v2"; 
 const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; 
-const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
-const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
-// 新增：繪圖專用 API (請確保部署後更新此網址)
-const BACKEND_IMAGE_GEN_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/image";
+// 修改：建議使用相對路徑，讓它自動適應您的 Vercel 網域
+const BACKEND_API_URL = "/api/places"; 
+const BACKEND_GEMINI_URL = "/api/gemini";
+const BACKEND_IMAGE_GEN_URL = "/api/image";
 
 type Temp = "hot" | "cold";
 type Hunger = "full" | "snack"; 
@@ -41,7 +41,6 @@ type LogEntry = {
   choiceText: string;
   isCategory?: boolean;
   isPinned?: boolean; 
-  // 新增：紀錄該次選擇對應的 AI 圖片，避免重複生成
   aiImageUrl?: string; 
   sig?: {
     warmth: number; 
@@ -320,13 +319,12 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
         }}
       >
         <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
-          {/* 這裡我們不顯示複雜的圖，只顯示縮圖或小球，避免列表太花 */}
           <EnergyCore 
             mode={item.sig?.mode ?? "satisfied"} 
             temp={item.sig?.temp} 
             richness={item.sig?.richness ?? 0.5} 
             size={88} 
-            imageUrl={item.aiImageUrl} // 如果紀錄裡有圖，就顯示圖
+            imageUrl={item.aiImageUrl} 
           />
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
@@ -459,7 +457,6 @@ function TopBar({ title, onBack, onOpenLog, showBack, showLog }: { title: string
   );
 }
 
-// 升級版 EnergyCore：支援直接顯示 AI 生成圖片
 function EnergyCore({ 
   mode = "stable", 
   temp = null, 
@@ -492,12 +489,10 @@ function EnergyCore({
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       
-      {/* 1. 背景光暈層 (永遠存在，提供氛圍) */}
       <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
       
       <AnimatePresence mode="wait">
         {imageUrl ? (
-          /* 2a. AI 生成的擬態圖片 (淡入顯示) */
           <motion.img 
              key="ai-image"
              src={imageUrl} 
@@ -508,12 +503,11 @@ function EnergyCore({
              transition={{ duration: 0.8, ease: "easeOut" }}
              className="absolute inset-4 w-[85%] h-[85%] object-contain"
              style={{ 
-               filter: `drop-shadow(0 0 20px ${palette.glowColor}0.5))`, // 讓圖片也有光暈，融合背景
+               filter: `drop-shadow(0 0 20px ${palette.glowColor}0.5))`, 
                zIndex: 10 
              }}
           />
         ) : (
-          /* 2b. 原始幾何能量球 (當沒有圖片或正在載入時顯示) */
           <>
             <motion.div 
                 key="core-shape"
@@ -533,7 +527,6 @@ function EnergyCore({
         )}
       </AnimatePresence>
       
-      {/* 4. 衛星層 (滿足模式的光環) */}
       <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
     </div>
   );
@@ -606,52 +599,49 @@ export default function App() {
 
   const VISIBLE_COUNT = 3;
 
-  // --- AI 生圖邏輯 ---
-  // 1. 狀態：存放當前生成的圖片網址
   const [currentAiImage, setCurrentAiImage] = useState<string | null>(null);
-  // 2. 避免重複生成：紀錄上一次生成時的關鍵字
   const lastGenKeyword = useRef<string | null>(null);
 
-  // 3. 取得要生成圖片的關鍵字
   const targetKeyword = useMemo(() => {
       if (screen === "recommend" && realPlaces.length > 0) {
-          // 推薦頁：取第一筆資料的名稱最準
           return realPlaces[0].name.split(" ")[0]; 
       }
       if (screen === "home" && log.length > 0) {
-          // 首頁：如果最新的紀錄已經有存圖，直接用；否則嘗試生圖
-          if (log[0].aiImageUrl) return null; // 已經有圖了，不用再生
+          if (log[0].aiImageUrl) return null; 
           return log[0].choiceText.replace("搜尋：", "").split(" ")[0];
       }
       return null;
   }, [screen, realPlaces, log]);
 
-  // 4. 觸發 AI 生圖
   useEffect(() => {
     if (!targetKeyword || targetKeyword === lastGenKeyword.current) return;
     if (!BACKEND_IMAGE_GEN_URL) return;
 
     lastGenKeyword.current = targetKeyword;
     
-    // 如果首頁已經有圖，就不跑這段
     if (screen === "home" && log[0]?.aiImageUrl) {
       setCurrentAiImage(log[0].aiImageUrl);
       return;
     }
 
-    // 開始生成...
     fetch(BACKEND_IMAGE_GEN_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keyword: targetKeyword })
     })
-    .then(res => res.json())
+    .then(async res => {
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`[${res.status}] ${errText}`);
+        }
+        return res.json();
+    })
     .then(data => {
         if (data.imageUrl) {
             setCurrentAiImage(data.imageUrl);
         }
     })
-    .catch(e => console.warn("AI Image Gen Failed:", e));
+    .catch(e => console.error("AI Image Gen Error (Check Cloud Console API Restrictions):", e));
 
   }, [targetKeyword, screen, log]);
 
@@ -669,7 +659,7 @@ export default function App() {
       if (!BACKEND_API_URL) return;
       setIsRealLoading(true);
       setApiError(null);
-      setCurrentAiImage(null); // 切換到推薦頁時，先清空舊圖，顯示載入動畫
+      setCurrentAiImage(null); 
       
       const payload = { 
         lat: userLocation.lat, 
@@ -724,7 +714,7 @@ export default function App() {
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
     setIsRandomMode(false); 
     setSuggestedPlaceIds(new Set());
-    setCurrentAiImage(null); // 重置時清空圖片
+    setCurrentAiImage(null); 
     lastGenKeyword.current = null;
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
@@ -775,7 +765,6 @@ export default function App() {
 
   function handlePressUp() { setPressing(false); if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; } }
 
-  // 儲存紀錄時，也把當前生成的 AI 圖片存進去
   function saveEnergy(choiceText: string, isCategory: boolean = false) {
     const entry: LogEntry = {
       id: `e_${Date.now()}`,
@@ -784,7 +773,6 @@ export default function App() {
       choiceText: choiceText || "",
       isCategory, 
       isPinned: false, 
-      // 關鍵：把這一次生成的圖存起來，這樣去「我的食力」看的時候圖還會在
       aiImageUrl: currentAiImage || undefined,
       sig: { warmth: clamp(0.35 + richness * 0.65, 0, 1), mode: "satisfied", temp, hunger, speed, richness },
     };
@@ -925,7 +913,6 @@ export default function App() {
                   <div className="text-2xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>來覓食</div>
                   <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center", fontWeight: 400 }}>佛系覓食，點幾下就知道要吃什麼</div>
                   <div className="mt-8 flex flex-col items-center justify-center">
-                    {/* 首頁：如果 log 裡有圖，顯示 log 的圖 (currentAiImage 會被更新) */}
                     {log.length > 0 && log[0] ? <EnergyCore mode={log[0].sig?.mode ?? "chaos"} temp={log[0].sig?.temp} richness={log[0].sig?.richness ?? 0.5} size={220} imageUrl={currentAiImage || log[0].aiImageUrl} /> : <EnergyCore mode="chaos" richness={0.5} size={220} imageUrl={currentAiImage} />}
                   </div>
                   {log.length > 0 && log[0] && (
@@ -1008,7 +995,6 @@ export default function App() {
                 <motion.div key="recommend" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
                   <div className="text-xl mt-4 text-center font-bold" style={{color: warm.text}}>附近可以吃什麼</div>
                   <div className="flex flex-col items-center justify-center mb-6">
-                    {/* 推薦頁：顯示目前生成的圖片 (currentAiImage) */}
                     <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} imageUrl={currentAiImage} />
                     <div className="mt-4 flex flex-wrap gap-2 justify-center">{tags.map((t) => (<Tag key={t}>{t}</Tag>))}</div>
                   </div>
