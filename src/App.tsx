@@ -257,12 +257,14 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { i
   // 智慧暗示：如果是第一筆且沒學過，就自動晃動一下
   useEffect(() => {
     if (tease) {
-        // 先往左一點露出紅色，再往右一點露出橘色，再回正
-        const controls = animate(x, [0, -40, 0, 40, 0], {
-            duration: 1.2,
+        // 優化動畫：更優雅的滑動展示 (Peek)
+        // 1. 變慢：總時長拉到 2.2秒
+        // 2. 停頓：在露出紅色和橘色時稍微停一下，讓使用者看清楚
+        const controls = animate(x, [0, -60, -60, 0, 60, 60, 0], {
+            duration: 2.2,
             ease: "easeInOut",
-            delay: 0.5, // 稍微等一下再動，避免進場太突兀
-            times: [0, 0.2, 0.5, 0.8, 1]
+            delay: 0.8, // 進場後等一下再開始，不要嚇到人
+            times: [0, 0.2, 0.35, 0.5, 0.65, 0.8, 1] 
         });
         return () => controls.stop();
     }
