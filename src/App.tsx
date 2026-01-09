@@ -950,10 +950,8 @@ export default function App() {
                         <div className="text-lg font-bold mb-1" style={{color: warm.text}}>{aiSuggestion.dish}</div>
                         {/* New Info Block */}
                         {aiSuggestion.targetPlace && (
-                            <div className="text-xs font-medium mb-3 flex items-center gap-2" style={{ color: warm.sub }}>
-                                <span>{aiSuggestion.targetPlace.distance}</span>
-                                <span>•</span>
-                                <span style={{color: warm.orange}}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : '無評分'}</span>
+                            <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>
+                                {aiSuggestion.targetPlace.distance} ・ <span style={{color: warm.orange}}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : '無評分'}</span>
                             </div>
                         )}
                         <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{color: "#6B5D52"}}>{aiSuggestion.reason}</div>
