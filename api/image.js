@@ -8,67 +8,47 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 2. 驗證金鑰
-  const apiKey = process.env.GEMINI_API_KEY; 
-  if (!apiKey) {
-    console.error("Server Error: GEMINI_API_KEY is missing in environment variables.");
-    return res.status(500).json({ error: "Server Configuration Error: Missing API Key" });
-  }
-
-  // 3. 取得並處理關鍵字
+  // 2. 取得關鍵字 (不再強制檢查 Gemini Key，因為我們改用 Pollinations)
   const { keyword } = req.body;
   if (!keyword) {
     return res.status(400).json({ error: "Missing keyword" });
   }
   
-  // 強制轉字串並移除過長內容，避免 Prompt 錯誤
   const safeKeyword = String(keyword).slice(0, 50);
+  const seed = Math.floor(Math.random() * 10000); // 隨機數，確保每次都有變化
 
-  // 4. 定義風格咒語 (Prompt)
-  const stylePrompt = `
-    3D render of ${safeKeyword}, cute style.
-    Appearance: Translucent frosted glass material, soft inner orange glow, minimalist, rounded edges.
-    Background: Isolated on white.
-    High quality, 8k resolution.
-  `;
+  // 3. 定義風格咒語 (針對 Pollinations 優化)
+  // Pollinations 懂很細的 Prompt，我們保留那個漂亮的玻璃質感描述
+  const prompt = encodeURIComponent(`
+    cute 3D icon of ${safeKeyword}, 
+    style of glassmorphism, translucent frosted glass material, 
+    soft inner warm orange glow, amber and peach color palette,
+    minimalist, centered, isolated on white background, 
+    high quality, 8k render, unreal engine 5, --no text
+  `.replace(/\s+/g, " ").trim());
 
   try {
-    // 5. 呼叫 Imagen 4.0 模型 (修正版本號)
-    // 使用 imagen-4.0-generate-001
-    const googleUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`;
+    // 4. 呼叫 Pollinations AI
+    const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?width=512&height=512&seed=${seed}&nologo=true`;
     
-    const response = await fetch(googleUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          instances: [{ prompt: stylePrompt }],
-          parameters: { sampleCount: 1, aspectRatio: "1:1" },
-        }),
-    });
+    const response = await fetch(imageUrl);
 
     if (!response.ok) {
-        // 捕捉並印出詳細錯誤，方便在 Vercel Logs 查看
-        const errorText = await response.text();
-        console.error(`Google Imagen API Error (${response.status}):`, errorText);
-        throw new Error(`Google API Refused: ${response.status} - ${errorText}`);
+        throw new Error(`Pollinations API Error: ${response.status}`);
     }
 
-    const data = await response.json();
+    // 5. 取得圖片並轉為 Buffer
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
     
-    // 解析 Base64
-    const base64Image = data.predictions?.[0]?.bytesBase64Encoded;
-    
-    if (!base64Image) {
-        console.error("Google Response Data:", JSON.stringify(data));
-        throw new Error("No image data found in Google response");
-    }
+    // 6. 轉為 Base64 字串回傳
+    const base64Image = `data:image/jpeg;base64,${buffer.toString('base64')}`;
 
-    // 6. 成功！回傳圖片
-    res.status(200).json({ imageUrl: `data:image/png;base64,${base64Image}` });
+    // 7. 成功！
+    res.status(200).json({ imageUrl: base64Image });
 
   } catch (error) {
     console.error("Backend Image Generation FAILED:", error);
-    // 回傳 500 給前端，前端會保持原本的圓球，不會白畫面
     res.status(500).json({ error: "Image generation failed", details: error.message });
   }
 }
