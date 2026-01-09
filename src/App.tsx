@@ -239,6 +239,7 @@ function useLocalStorageLog() {
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
+      // 優化：text-[11px] 縮小字體, px-2 py-0.5 緊湊內距, whitespace-nowrap 不斷行
       className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tracking-wide whitespace-nowrap"
       style={{
         background: "rgba(255, 211, 106, 0.15)", 
@@ -256,12 +257,16 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { i
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
   const [isDragging, setIsDragging] = useState(false);
 
+  // 智慧暗示：如果是第一筆且沒學過，就自動晃動一下
   useEffect(() => {
     if (tease) {
+        // 優化動畫：更優雅的滑動展示 (Peek)
+        // 1. 變慢：總時長拉到 2.2秒
+        // 2. 停頓：在露出紅色和橘色時稍微停一下，讓使用者看清楚
         const controls = animate(x, [0, -60, -60, 0, 60, 60, 0], {
             duration: 2.2,
             ease: "easeInOut",
-            delay: 0.8, 
+            delay: 0.8, // 進場後等一下再開始，不要嚇到人
             times: [0, 0.2, 0.35, 0.5, 0.65, 0.8, 1] 
         });
         return () => controls.stop();
@@ -468,7 +473,7 @@ function EnergyCore({
 }) {
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
-  const jitter = mode === "chaos" ? 6 : 0;
+  // const jitter = mode === "chaos" ? 6 : 0; // 已移除此變數
   
   const palette = useMemo(() => {
     if (temp === "hot") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," };
