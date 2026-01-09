@@ -33,9 +33,9 @@ export default async function handler(req, res) {
   `;
 
   try {
-    // 5. 呼叫 Imagen 3.0 模型
-    // 注意：如果您的帳號還不能用 3.0，這邊會報錯。
-    const googleUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`;
+    // 5. 呼叫 Imagen 4.0 模型 (修正版本號)
+    // 使用 imagen-4.0-generate-001
+    const googleUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`;
     
     const response = await fetch(googleUrl, {
         method: "POST",
