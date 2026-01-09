@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useMotionValue, useTransform } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
 const LS_KEY = "whatnow_energy_log_v2"; 
+const LS_SWIPE_LEARNED_KEY = "whatnow_swipe_learned"; // 新增：紀錄是否學會滑動的 Key
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
 
@@ -248,10 +249,24 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void }) {
+function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void; tease?: boolean }) {
   const x = useMotionValue(0);
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
   const [isDragging, setIsDragging] = useState(false);
+
+  // 智慧暗示：如果是第一筆且沒學過，就自動晃動一下
+  useEffect(() => {
+    if (tease) {
+        // 先往左一點露出紅色，再往右一點露出橘色，再回正
+        const controls = animate(x, [0, -40, 0, 40, 0], {
+            duration: 1.2,
+            ease: "easeInOut",
+            delay: 0.5, // 稍微等一下再動，避免進場太突兀
+            times: [0, 0.2, 0.5, 0.8, 1]
+        });
+        return () => controls.stop();
+    }
+  }, [tease, x]);
 
   return (
     <div className="relative mb-3 group">
@@ -492,6 +507,22 @@ export default function App() {
   // 新增狀態：是否為隨機模式 (長按進入)
   const [isRandomMode, setIsRandomMode] = useState(false);
 
+  // 紀錄使用者是否已經學會滑動操作
+  const [hasLearnedSwipe, setHasLearnedSwipe] = useState(() => {
+    try {
+        return !!localStorage.getItem(LS_SWIPE_LEARNED_KEY);
+    } catch {
+        return false;
+    }
+  });
+
+  const markSwipeLearned = () => {
+      if (!hasLearnedSwipe) {
+          setHasLearnedSwipe(true);
+          try { localStorage.setItem(LS_SWIPE_LEARNED_KEY, "true"); } catch {}
+      }
+  };
+
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
@@ -640,10 +671,12 @@ export default function App() {
   }
 
   function togglePin(id: string) {
+    markSwipeLearned(); // 使用者成功操作了釘選，代表學會了
     setLog(prev => prev.map(item => item.id === id ? { ...item, isPinned: !item.isPinned } : item));
   }
 
   function deleteLog(id: string) {
+    markSwipeLearned(); // 使用者成功操作了刪除，代表學會了
     setLog(prev => prev.filter(item => item.id !== id));
   }
 
@@ -970,15 +1003,22 @@ export default function App() {
                                 )}
                                 <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
-                            {group.items.map((item) => (
-                              <SwipeableLogItem 
-                                key={item.id} 
-                                item={item} 
-                                onReEat={() => handleReEat(item)} 
-                                onPin={() => togglePin(item.id)}
-                                onDelete={() => deleteLog(item.id)}
-                              />
-                            ))}
+                            {group.items.map((item, itemIndex) => {
+                                // 判斷這是不是整個列表的第一個項目
+                                // 因為有分組，我們需要一個簡單的邏輯：
+                                // 如果是第一個群組的第一個項目，而且使用者還沒學會滑動，就觸發 tease
+                                const isFirstItem = group === groupedLogs[0] && itemIndex === 0;
+                                return (
+                                  <SwipeableLogItem 
+                                    key={item.id} 
+                                    item={item} 
+                                    onReEat={() => handleReEat(item)} 
+                                    onPin={() => togglePin(item.id)}
+                                    onDelete={() => deleteLog(item.id)}
+                                    tease={isFirstItem && !hasLearnedSwipe}
+                                  />
+                                );
+                            })}
                           </div>
                         ))
                       )}
