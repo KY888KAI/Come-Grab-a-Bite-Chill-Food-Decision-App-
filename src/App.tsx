@@ -488,6 +488,9 @@ export default function App() {
 
   const pressTimer = useRef<number | null>(null);
   const [pressing, setPressing] = useState(false);
+  
+  // 新增狀態：是否為隨機模式 (長按進入)
+  const [isRandomMode, setIsRandomMode] = useState(false);
 
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -572,6 +575,7 @@ export default function App() {
   function resetFlow() {
     setChooseStep(0); setTemp(null); setHunger(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
+    setIsRandomMode(false); // 重置時預設為非隨機模式
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
@@ -583,13 +587,22 @@ export default function App() {
       setChooseStep((s) => s - 1);
       return;
     }
-    if (screen === "recommend") return setScreen("choose"); 
+    if (screen === "recommend") {
+        // 修正 UX: 如果是隨機模式進來的，按返回直接回首頁，不顯示選擇步驟
+        if (isRandomMode) return goHome();
+        return setScreen("choose"); 
+    }
     if (screen === "energy") return setScreen("recommend");
     if (screen === "log") return goHome();
     return goHome();
   }
 
-  function startDecision() { resetFlow(); setScreen("choose"); }
+  function startDecision() { 
+      resetFlow(); 
+      setIsRandomMode(false); // 手動開始
+      setScreen("choose"); 
+  }
+  
   function nextChoose() { if (chooseStep < totalChooseSteps - 1) setChooseStep((s) => s + 1); else setScreen("recommend"); }
 
   function randomizeAll() {
@@ -602,7 +615,13 @@ export default function App() {
   function handlePressDown() {
     setPressing(true);
     if (pressTimer.current) window.clearTimeout(pressTimer.current);
-    pressTimer.current = window.setTimeout(() => { randomizeAll(); setPressing(false); pressTimer.current = null; setScreen("recommend"); }, 650);
+    pressTimer.current = window.setTimeout(() => { 
+        randomizeAll(); 
+        setPressing(false); 
+        pressTimer.current = null; 
+        setIsRandomMode(true); // 設定為隨機模式
+        setScreen("recommend"); 
+    }, 650);
   }
 
   function handlePressUp() { setPressing(false); if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; } }
@@ -690,11 +709,11 @@ export default function App() {
       
       let suggestion = null;
       if (data.dish) {
-         suggestion = data;
+          suggestion = data;
       } else if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-         const text = data.candidates[0].content.parts[0].text;
-         const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-         suggestion = JSON.parse(cleanText);
+          const text = data.candidates[0].content.parts[0].text;
+          const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+          suggestion = JSON.parse(cleanText);
       }
 
       if (suggestion) {
@@ -721,12 +740,21 @@ export default function App() {
   }
 
   const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" } as const;
-  const showBack = screen !== "home"; 
+  
+  // UX 修改：energy 和 log 頁面都不顯示返回鍵
+  const showBack = screen !== "home" && screen !== "energy" && screen !== "log"; 
 
   return (
     <div className="min-h-screen w-full flex items-start justify-center px-3" style={{ background: warm.bg, color: warm.text }}>
       <div className="w-full max-w-[420px] pb-10">
-        <TopBar title={subtleTitle()} onBack={goBack} onOpenLog={() => setScreen("log")} showBack={showBack} showLog={log.length > 0} />
+        <TopBar 
+            title={subtleTitle()} 
+            onBack={goBack} 
+            onOpenLog={() => setScreen("log")} 
+            showBack={showBack} 
+            // 修正：在 energy 和 log 頁面時隱藏「回顧食力」按鈕
+            showLog={log.length > 0 && screen !== "energy" && screen !== "log"} 
+        />
         <div className="px-4 pt-4">
           <div className="rounded-[28px] overflow-hidden relative backdrop-blur-md" style={{ ...card, background: screen === "energy" || screen === "home" ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.72)" }}>
             <AnimatePresence mode="wait">
@@ -750,8 +778,8 @@ export default function App() {
                     <button onMouseDown={handlePressDown} onMouseUp={handlePressUp} onMouseLeave={handlePressUp} onTouchStart={handlePressDown} onTouchEnd={handlePressUp} className="w-full rounded-2xl px-4 py-4 transition overflow-hidden relative" style={{ border: warm.border, background: pressing ? "linear-gradient(135deg, rgba(255,138,61,0.18) 0%, rgba(255,211,106,0.22) 100%)" : "rgba(255,255,255,0.75)", boxShadow: pressing ? warm.shadowActive : warm.shadow }}>
                       <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>沒想法</div>
                       <div className="relative z-10 mt-1 text-sm" style={{ color: warm.sub, textAlign: "center" }}>長按一下，隨緣覓食</div>
-                       {/* 增加流光質感 */}
-                       <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
+                        {/* 增加流光質感 */}
+                        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
                     </button>
                   </div>
                 </motion.div>
@@ -826,7 +854,7 @@ export default function App() {
                   <div className="mt-4 space-y-4">
                     {isRealLoading && (
                       <div className="py-8 text-center text-gray-400 animate-pulse text-sm">
-                         正在搜尋附近的美味...
+                          正在搜尋附近的美味...
                       </div>
                     )}
                     
@@ -948,7 +976,8 @@ export default function App() {
                   </div>
                   {/* 3. 修復：底部間距問題，增加 pb-10 避免貼底 */}
                   <div className="absolute bottom-0 left-0 w-full px-6 pb-10 pt-12 space-y-5 pointer-events-none" style={{ background: "linear-gradient(to top, #FAF9F6 70%, rgba(250, 249, 246, 0.8) 85%, transparent 100%)" }}>
-                    <div className="pointer-events-auto space-y-5"><PrimaryButton onClick={startDecision}>再覓食一次</PrimaryButton><PrimaryButton subtle onClick={goHome}>回首頁</PrimaryButton></div>
+                    {/* UX 修改：移除「再覓食一次」，僅保留「回首頁」並升級為 PrimaryButton */}
+                    <div className="pointer-events-auto space-y-5"><PrimaryButton onClick={goHome}>回首頁</PrimaryButton></div>
                   </div>
                 </motion.div>
               )}
@@ -959,5 +988,3 @@ export default function App() {
     </div>
   );
 }
-
-
