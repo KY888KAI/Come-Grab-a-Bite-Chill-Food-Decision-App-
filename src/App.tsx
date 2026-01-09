@@ -485,7 +485,6 @@ function EnergyCore({
 }) {
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
-  const jitter = mode === "chaos" ? 6 : 0;
   
   const palette = useMemo(() => {
     if (temp === "hot") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," };
@@ -1114,7 +1113,6 @@ export default function App() {
                   </div>
                   <div className="flex-1 overflow-y-auto relative px-6">
                     <div className="pt-4 pb-44 space-y-3">
-                      {/* 新增：分組顯示 */}
                       {groupedLogs.length === 0 ? (
                         <div className="rounded-2xl p-6 mt-4 text-center" style={{ border: "1px dashed rgba(255,138,61,0.3)", background: "rgba(255,211,106,0.08)" }}>
                           <div className="text-base font-bold" style={{color: warm.text}}>還沒有食力</div><div className="mt-2 text-sm text-gray-500">這裡會記錄你所有的覓食歷程</div>
@@ -1140,9 +1138,6 @@ export default function App() {
                                 <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
                             {group.items.map((item, itemIndex) => {
-                                // 判斷這是不是整個列表的第一個項目
-                                // 因為有分組，我們需要一個簡單的邏輯：
-                                // 如果是第一個群組的第一個項目，而且使用者看過的次數少於上限 (3次)，就觸發 tease
                                 const isFirstItem = group === groupedLogs[0] && itemIndex === 0;
                                 return (
                                   <SwipeableLogItem 
@@ -1152,7 +1147,7 @@ export default function App() {
                                     onPin={() => togglePin(item.id)}
                                     onDelete={() => deleteLog(item.id)}
                                     tease={isFirstItem && swipeTeaseCount < MAX_TEASE_COUNT}
-                                    onTeaseComplete={incrementTeaseCount} // 動畫播完就增加計數
+                                    onTeaseComplete={incrementTeaseCount} 
                                   />
                                 );
                             })}
@@ -1161,9 +1156,7 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  {/* 3. 修復：底部間距問題，增加 pb-10 避免貼底 */}
                   <div className="absolute bottom-0 left-0 w-full px-6 pb-10 pt-12 space-y-5 pointer-events-none" style={{ background: "linear-gradient(to top, #FAF9F6 70%, rgba(250, 249, 246, 0.8) 85%, transparent 100%)" }}>
-                    {/* UX 修改：移除「再覓食一次」，僅保留「回首頁」並升級為 PrimaryButton */}
                     <div className="pointer-events-auto space-y-5"><PrimaryButton onClick={goHome}>回首頁</PrimaryButton></div>
                   </div>
                 </motion.div>
