@@ -8,7 +8,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const apiKey = process.env.GEMINI_API_KEY; // 確保環境變數有這把鑰匙
+  const apiKey = process.env.GEMINI_API_KEY; 
   if (!apiKey) {
     return res.status(500).json({ error: "Missing API Key" });
   }
@@ -18,8 +18,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing keyword" });
   }
 
-  // ★ 關鍵：這裡定義了您想要的「發光果凍/玻璃風格」
-  // 我們把使用者的關鍵字 (如: 拉麵) 嵌入到這段咒語中
+  // ★ 關鍵：定義發光果凍/玻璃風格的 Prompt
   const stylePrompt = `
     A high-quality 3D icon of ${keyword}.
     Style: Glassmorphism, translucent frosted glass material, soft inner glowing light.
@@ -30,7 +29,7 @@ export default async function handler(req, res) {
   `;
 
   try {
-    // 呼叫 Imagen 模型 (imagen-3.0-generate-001 或更新版)
+    // 呼叫 Imagen 3.0 模型
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`,
       {
@@ -49,7 +48,7 @@ export default async function handler(req, res) {
 
     const data = await response.json();
     
-    // Imagen 回傳的是 Base64 編碼的圖片
+    // Imagen 回傳 Base64 編碼的圖片
     const base64Image = data.predictions?.[0]?.bytesBase64Encoded;
     
     if (!base64Image) {
