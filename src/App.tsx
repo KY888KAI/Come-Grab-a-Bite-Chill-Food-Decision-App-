@@ -924,8 +924,18 @@ export default function App() {
                 <motion.div key="log" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-0 h-[600px] flex flex-col">
                   <div className="px-6 pt-8 pb-2 flex items-end justify-between gap-3 shrink-0">
                     <div><div className="text-xl" style={{ fontWeight: 700, letterSpacing: "0.02em" }}>我的食力</div><div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>回顧每一次的美味選擇</div></div>
-                    {/* 2. 修復：清空按鈕邊框 */}
-                    <button className="rounded-xl px-3 py-2 text-xs font-medium" style={{ border: warm.borderAction, background: "rgba(255,255,255,0.5)", color: warm.orange }} onClick={() => setLog([])} title="清空本機紀錄">
+                    {/* 2. 修復：清空按鈕邊框 + 防呆 */}
+                    <button 
+                        className="rounded-xl px-3 py-2 text-xs font-medium transition-opacity disabled:opacity-50" 
+                        style={{ border: warm.borderAction, background: "rgba(255,255,255,0.5)", color: warm.orange }} 
+                        onClick={() => {
+                            if (window.confirm("確定要清空所有紀錄嗎？此動作無法復原。")) {
+                                setLog([]);
+                            }
+                        }} 
+                        disabled={log.length === 0}
+                        title="清空本機紀錄"
+                    >
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M3 6h18"></path>
                             <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
