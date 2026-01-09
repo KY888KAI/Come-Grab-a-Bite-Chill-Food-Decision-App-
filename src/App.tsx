@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
 const LS_KEY = "whatnow_energy_log_v2"; 
-const LS_SWIPE_LEARNED_KEY = "whatnow_swipe_learned"; // 新增：紀錄是否學會滑動的 Key
+const LS_SWIPE_LEARNED_KEY = "whatnow_swipe_learned"; 
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
 
@@ -54,6 +54,9 @@ type AiSuggestion = {
   reason: string;
   targetPlace?: Place;
 } | null;
+
+// 預設的完美圓形路徑 (所有變形的起點)
+const DEFAULT_CIRCLE_PATH = "M50,5 A45,45 0 1,1 49.9,5 Z";
 
 // --- 視覺風格系統 ---
 const warm = {
@@ -236,7 +239,6 @@ function useLocalStorageLog() {
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
-      // 優化：text-[11px] 縮小字體, px-2 py-0.5 緊湊內距, whitespace-nowrap 不斷行
       className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tracking-wide whitespace-nowrap"
       style={{
         background: "rgba(255, 211, 106, 0.15)", 
@@ -254,16 +256,12 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { i
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
   const [isDragging, setIsDragging] = useState(false);
 
-  // 智慧暗示：如果是第一筆且沒學過，就自動晃動一下
   useEffect(() => {
     if (tease) {
-        // 優化動畫：更優雅的滑動展示 (Peek)
-        // 1. 變慢：總時長拉到 2.2秒
-        // 2. 停頓：在露出紅色和橘色時稍微停一下，讓使用者看清楚
         const controls = animate(x, [0, -60, -60, 0, 60, 60, 0], {
             duration: 2.2,
             ease: "easeInOut",
-            delay: 0.8, // 進場後等一下再開始，不要嚇到人
+            delay: 0.8, 
             times: [0, 0.2, 0.35, 0.5, 0.65, 0.8, 1] 
         });
         return () => controls.stop();
@@ -321,6 +319,7 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { i
         }}
       >
         <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
+          {/* 在列表中的小能量球，我們就用預設圓形，因為太小了變形也看不清楚，保持效能 */}
           <EnergyCore mode={item.sig?.mode ?? "satisfied"} temp={item.sig?.temp} richness={item.sig?.richness ?? 0.5} size={88} />
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
@@ -333,8 +332,6 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { i
                 )}
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-            
-            {/* 優化：flex-wrap 允許換行，gap-1 縮小間距，確保整齊 */}
             <div className="flex flex-wrap gap-1 w-full">
                 {item.tags?.slice(0, 3).map((t) => (
                   <Tag key={t}>{t}</Tag>
@@ -455,7 +452,20 @@ function TopBar({ title, onBack, onOpenLog, showBack, showLog }: { title: string
   );
 }
 
-function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }: { mode?: "chaos" | "stable" | "satisfied"; temp?: Temp | null; richness?: number; size?: number; }) {
+// 升級版 EnergyCore：支援 AI 生成的動態路徑
+function EnergyCore({ 
+  mode = "stable", 
+  temp = null, 
+  richness = 0.5, 
+  size = 220, 
+  customPath = DEFAULT_CIRCLE_PATH 
+}: { 
+  mode?: "chaos" | "stable" | "satisfied"; 
+  temp?: Temp | null; 
+  richness?: number; 
+  size?: number; 
+  customPath?: string;
+}) {
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
   const jitter = mode === "chaos" ? 6 : 0;
@@ -472,11 +482,55 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   const glowOpacity = isDefault ? 0.2 : 0.1 + richness * 0.15;
   const dur = mode === "chaos" ? 1.4 : mode === "stable" ? 2.6 : 3.2;
 
+  // 使用 useMemo 確保 path 有效，若無效則回退到圓形
+  const safePath = useMemo(() => {
+      return (customPath && customPath.trim().length > 10) ? customPath : DEFAULT_CIRCLE_PATH;
+  }, [customPath]);
+
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      {/* 1. 背景光暈層 */}
       <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
-      <motion.div className="absolute inset-6 rounded-[42%]" animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }} transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }} style={{ background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)`, transform: `translate(${jitter}px, ${-jitter}px)` }} />
+      
+      {/* 2. 核心形狀層 (SVG) */}
+      <motion.svg 
+        viewBox="0 0 100 100" 
+        className="absolute inset-6 w-[70%] h-[70%]"
+        style={{ overflow: 'visible' }}
+        animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }}
+        transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <defs>
+          <radialGradient id="coreGradient" cx="30%" cy="30%" r="70%">
+            <stop offset="0%" stopColor={`${palette.b}0.9)`} />
+            <stop offset="45%" stopColor={`${palette.a}${coreOpacity})`} />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
+          <filter id="glowFilter" x="-50%" y="-50%" width="200%" height="200%">
+             <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+             <feMerge>
+                 <feMergeNode in="coloredBlur"/>
+                 <feMergeNode in="SourceGraphic"/>
+             </feMerge>
+          </filter>
+        </defs>
+        
+        {/* 核心路徑：這裡會進行 AI 形狀的 Morphing */}
+        <motion.path 
+          d={safePath}
+          fill="url(#coreGradient)"
+          stroke="none"
+          filter="url(#glowFilter)"
+          initial={false}
+          animate={{ d: safePath }}
+          transition={{ duration: 1.5, ease: "easeInOut" }} // 慢慢變形，更有生物感
+        />
+      </motion.svg>
+
+      {/* 3. 霧氣層 */}
       <motion.div className="absolute inset-10 rounded-[48%]" animate={mode === "chaos" ? { opacity: [0.25, 0.6, 0.35, 0.7, 0.25], x: [0, 2, -2, 1, 0], y: [0, -1, 2, -2, 0] } : { opacity: [0.35, 0.55, 0.35] }} transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} style={{ background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} />
+      
+      {/* 4. 衛星層 */}
       <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
     </div>
   );
@@ -506,10 +560,8 @@ export default function App() {
   const pressTimer = useRef<number | null>(null);
   const [pressing, setPressing] = useState(false);
   
-  // 新增狀態：是否為隨機模式 (長按進入)
   const [isRandomMode, setIsRandomMode] = useState(false);
 
-  // 紀錄使用者是否已經學會滑動操作
   const [hasLearnedSwipe, setHasLearnedSwipe] = useState(() => {
     try {
         return !!localStorage.getItem(LS_SWIPE_LEARNED_KEY);
@@ -541,6 +593,71 @@ export default function App() {
   const groupedLogs = useMemo(() => groupLogsByDate(log), [log]);
 
   const VISIBLE_COUNT = 3;
+
+  // --- AI 擬態核心邏輯 ---
+  const [aiShapePath, setAiShapePath] = useState(DEFAULT_CIRCLE_PATH);
+  const lastGeneratedKeyword = useRef<string | null>(null);
+
+  // 1. 決定要畫什麼 (取得關鍵字)
+  const targetKeyword = useMemo(() => {
+      if (screen === "recommend" && realPlaces.length > 0) {
+          // 簡單取前幾個結果的共同關鍵字，或直接用第一個結果的名稱
+          return realPlaces[0].name.split(" ")[0]; 
+      }
+      if (screen === "home" && log.length > 0) {
+          // 取上一筆紀錄的名稱
+          const txt = log[0].choiceText.replace("搜尋：", "");
+          return txt.split(" ")[0];
+      }
+      return null;
+  }, [screen, realPlaces, log]);
+
+  // 2. 呼叫 Gemini 取得 SVG 路徑
+  useEffect(() => {
+      if (!targetKeyword || targetKeyword === lastGeneratedKeyword.current) return;
+      if (!BACKEND_GEMINI_URL) return;
+
+      lastGeneratedKeyword.current = targetKeyword;
+
+      // 構建一個專門用來產生 SVG Path 的 Prompt
+      const shapePrompt = `
+        請擔任一位 SVG 向量圖形設計師。
+        任務：請繪製一個代表「${targetKeyword}」的抽象、極簡風格圖標。
+        
+        嚴格要求：
+        1. 只回傳一個 SVG path 的 d 屬性字串。
+        2. 不要包含 <svg> 標籤，不要包含 markdown 格式，只要純字串。
+        3. 路徑必須是單一封閉路徑 (Single closed path)。
+        4. 必須適合放在 viewBox="0 0 100 100" 的正方形畫布中。
+        5. 風格必須圓潤、流暢，適合當作一個發光能量體的外輪廓，避免尖銳直角。
+        6. 圖形盡量填滿畫布中央 70% 區域。
+        
+        範例輸出：M50,10 Q90,10 90,50 Q90,90 50,90 Q10,90 10,50 Q10,10 50,10 Z
+      `;
+
+      fetch(BACKEND_GEMINI_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: shapePrompt })
+      })
+      .then(res => res.json())
+      .then(data => {
+          let pathData = "";
+          if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+              pathData = data.candidates[0].content.parts[0].text.trim();
+              // 清理可能多餘的符號
+              pathData = pathData.replace(/```/g, "").replace(/xml/g, "").replace(/svg/g, "").trim();
+          }
+          
+          // 簡單驗證是否為有效 path (起碼要有 M 和 Z)
+          if (pathData.startsWith("M") || pathData.startsWith("m")) {
+              setAiShapePath(pathData);
+          }
+      })
+      .catch(e => console.warn("AI Shape Gen Error", e));
+
+  }, [targetKeyword]);
+
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -608,7 +725,7 @@ export default function App() {
   function resetFlow() {
     setChooseStep(0); setTemp(null); setHunger(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
-    setIsRandomMode(false); // 重置時預設為非隨機模式
+    setIsRandomMode(false); 
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
@@ -621,7 +738,6 @@ export default function App() {
       return;
     }
     if (screen === "recommend") {
-        // 修正 UX: 如果是隨機模式進來的，按返回直接回首頁，不顯示選擇步驟
         if (isRandomMode) return goHome();
         return setScreen("choose"); 
     }
@@ -632,7 +748,7 @@ export default function App() {
 
   function startDecision() { 
       resetFlow(); 
-      setIsRandomMode(false); // 手動開始
+      setIsRandomMode(false); 
       setScreen("choose"); 
   }
   
@@ -652,7 +768,7 @@ export default function App() {
         randomizeAll(); 
         setPressing(false); 
         pressTimer.current = null; 
-        setIsRandomMode(true); // 設定為隨機模式
+        setIsRandomMode(true); 
         setScreen("recommend"); 
     }, 650);
   }
@@ -666,19 +782,19 @@ export default function App() {
       tags,
       choiceText: choiceText || "",
       isCategory, 
-      isPinned: false, // 預設不置頂
+      isPinned: false, 
       sig: { warmth: clamp(0.35 + richness * 0.65, 0, 1), mode: "satisfied", temp, hunger, speed, richness },
     };
     setLog((prev) => [entry, ...prev]);
   }
 
   function togglePin(id: string) {
-    markSwipeLearned(); // 使用者成功操作了釘選，代表學會了
+    markSwipeLearned(); 
     setLog(prev => prev.map(item => item.id === id ? { ...item, isPinned: !item.isPinned } : item));
   }
 
   function deleteLog(id: string) {
-    markSwipeLearned(); // 使用者成功操作了刪除，代表學會了
+    markSwipeLearned(); 
     setLog(prev => prev.filter(item => item.id !== id));
   }
 
@@ -687,7 +803,6 @@ export default function App() {
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     const url = getGoogleMapsUrl(name, placeId); 
     
-    // 立即記錄並跳轉，不等待 (手機體驗優先)
     saveEnergy(name, false); 
     setScreen("energy");
     navigateToMap(url);
@@ -776,7 +891,6 @@ export default function App() {
 
   const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" } as const;
   
-  // UX 修改：energy 和 log 頁面都不顯示返回鍵
   const showBack = screen !== "home" && screen !== "energy" && screen !== "log"; 
 
   return (
@@ -787,7 +901,6 @@ export default function App() {
             onBack={goBack} 
             onOpenLog={() => setScreen("log")} 
             showBack={showBack} 
-            // 修正：在 energy 和 log 頁面時隱藏「回顧食力」按鈕
             showLog={log.length > 0 && screen !== "energy" && screen !== "log"} 
         />
         <div className="px-4 pt-4">
@@ -798,7 +911,8 @@ export default function App() {
                   <div className="text-2xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>來覓食</div>
                   <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center", fontWeight: 400 }}>佛系覓食，點幾下就知道要吃什麼</div>
                   <div className="mt-8 flex flex-col items-center justify-center">
-                    {log.length > 0 && log[0] ? <EnergyCore mode={log[0].sig?.mode ?? "chaos"} temp={log[0].sig?.temp} richness={log[0].sig?.richness ?? 0.5} size={220} /> : <EnergyCore mode="chaos" richness={0.5} size={220} />}
+                    {/* 使用 AI 生成的路徑 */}
+                    {log.length > 0 && log[0] ? <EnergyCore mode={log[0].sig?.mode ?? "chaos"} temp={log[0].sig?.temp} richness={log[0].sig?.richness ?? 0.5} size={220} customPath={aiShapePath} /> : <EnergyCore mode="chaos" richness={0.5} size={220} customPath={aiShapePath} />}
                   </div>
                   {log.length > 0 && log[0] && (
                     <div className="mt-4 flex justify-center w-full px-8">
@@ -813,7 +927,6 @@ export default function App() {
                     <button onMouseDown={handlePressDown} onMouseUp={handlePressUp} onMouseLeave={handlePressUp} onTouchStart={handlePressDown} onTouchEnd={handlePressUp} className="w-full rounded-2xl px-4 py-4 transition overflow-hidden relative" style={{ border: warm.border, background: pressing ? "linear-gradient(135deg, rgba(255,138,61,0.18) 0%, rgba(255,211,106,0.22) 100%)" : "rgba(255,255,255,0.75)", boxShadow: pressing ? warm.shadowActive : warm.shadow }}>
                       <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>沒想法</div>
                       <div className="relative z-10 mt-1 text-sm" style={{ color: warm.sub, textAlign: "center" }}>長按一下，隨緣覓食</div>
-                        {/* 增加流光質感 */}
                         <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
                     </button>
                   </div>
@@ -843,7 +956,6 @@ export default function App() {
                       <>
                         <div className="mt-2 rounded-2xl p-5" style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.5)" }}>
                           <div className="flex items-center justify-between"><span className="text-xs" style={{ color: warm.sub }}>清爽</span><span className="text-xs" style={{ color: warm.sub }}>重口</span></div>
-                          {/* 美化拉條：客製化 Slider - 移除 transition-all 解決卡頓 */}
                           <div className="relative w-full h-6 mt-4 mb-2 flex items-center">
                             <div className="absolute w-full h-2 rounded-full overflow-hidden" style={{ background: "linear-gradient(90deg, #FAD961 0%, #F76B1C 100%)", opacity: 0.3 }}></div>
                             <input 
@@ -882,7 +994,8 @@ export default function App() {
                 <motion.div key="recommend" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
                   <div className="text-xl mt-4 text-center font-bold" style={{color: warm.text}}>附近可以吃什麼</div>
                   <div className="flex flex-col items-center justify-center mb-6">
-                    <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} />
+                    {/* 使用 AI 生成的路徑 */}
+                    <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} customPath={aiShapePath} />
                     <div className="mt-4 flex flex-wrap gap-2 justify-center">{tags.map((t) => (<Tag key={t}>{t}</Tag>))}</div>
                   </div>
                   
@@ -937,7 +1050,6 @@ export default function App() {
                         <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>出發去吃！ →</PrimaryButton>
                       </motion.div>
                     )}
-                    {/* 1. 修復：沒看到想吃的按鈕邊框 */}
                     <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
                       <div className="text-sm opacity-60 font-medium">還是沒看到想吃的？</div>
                       <div className="text-sm opacity-90"><span className="underline font-bold" style={{textUnderlineOffset: 3}}>在地圖搜尋「{mapsQuery}」</span></div>
@@ -950,7 +1062,8 @@ export default function App() {
                 <motion.div key="energy" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
                   <div className="text-xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>留下這次的食力</div>
                   <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center" }}>剛剛的選擇已自動紀錄。<br/>祝你用餐愉快！</div>
-                  <div className="mt-8 flex items-center justify-center"><EnergyCore mode="satisfied" temp={temp} richness={richness} size={240} /></div>
+                  {/* 使用 AI 生成的路徑 */}
+                  <div className="mt-8 flex items-center justify-center"><EnergyCore mode="satisfied" temp={temp} richness={richness} size={240} customPath={aiShapePath} /></div>
                   <div className="mt-8 space-y-5"><PrimaryButton onClick={() => setScreen("log")}>看我的食力</PrimaryButton><PrimaryButton subtle onClick={goHome}>回到首頁</PrimaryButton></div>
                 </motion.div>
               )}
@@ -959,7 +1072,6 @@ export default function App() {
                 <motion.div key="log" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-0 h-[600px] flex flex-col">
                   <div className="px-6 pt-8 pb-2 flex items-end justify-between gap-3 shrink-0">
                     <div><div className="text-xl" style={{ fontWeight: 700, letterSpacing: "0.02em" }}>我的食力</div><div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>回顧每一次的美味選擇</div></div>
-                    {/* 2. 修復：清空按鈕邊框 + 防呆 */}
                     <button 
                         className="rounded-xl px-3 py-2 text-xs font-medium transition-opacity disabled:opacity-50" 
                         style={{ border: warm.borderAction, background: "rgba(255,255,255,0.5)", color: warm.orange }} 
@@ -971,7 +1083,7 @@ export default function App() {
                         disabled={log.length === 0}
                         title="清空本機紀錄"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M3 6h18"></path>
                             <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
                             <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
@@ -990,13 +1102,13 @@ export default function App() {
                           <div key={group.title} className="mb-6">
                             <div className="flex items-center gap-2 mb-2 ml-1">
                                 {group.type === 'pinned' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <line x1="12" y1="17" x2="12" y2="22"></line>
                                       <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
                                     </svg>
                                 )}
                                 {group.type === 'date' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                                       <line x1="16" y1="2" x2="16" y2="6"></line>
                                       <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -1006,9 +1118,6 @@ export default function App() {
                                 <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
                             {group.items.map((item, itemIndex) => {
-                                // 判斷這是不是整個列表的第一個項目
-                                // 因為有分組，我們需要一個簡單的邏輯：
-                                // 如果是第一個群組的第一個項目，而且使用者還沒學會滑動，就觸發 tease
                                 const isFirstItem = group === groupedLogs[0] && itemIndex === 0;
                                 return (
                                   <SwipeableLogItem 
@@ -1026,9 +1135,7 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  {/* 3. 修復：底部間距問題，增加 pb-10 避免貼底 */}
                   <div className="absolute bottom-0 left-0 w-full px-6 pb-10 pt-12 space-y-5 pointer-events-none" style={{ background: "linear-gradient(to top, #FAF9F6 70%, rgba(250, 249, 246, 0.8) 85%, transparent 100%)" }}>
-                    {/* UX 修改：移除「再覓食一次」，僅保留「回首頁」並升級為 PrimaryButton */}
                     <div className="pointer-events-auto space-y-5"><PrimaryButton onClick={goHome}>回首頁</PrimaryButton></div>
                   </div>
                 </motion.div>
