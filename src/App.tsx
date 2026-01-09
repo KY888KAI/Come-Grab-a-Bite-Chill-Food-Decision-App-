@@ -143,6 +143,7 @@ function computeTags(args: { temp: Temp | null; hunger: Hunger | null; richness:
   if (temp) t.push(temp === "hot" ? "熱食" : "冷食");
   if (hunger) t.push(hunger === "full" ? "吃飽" : "解饞");
   t.push(style === "rich" ? "重口" : "清爽");
+  // 文案優化：將標籤顯示改為更直覺的描述
   if (speed) t.push(speed === "fast" ? "方便吃" : "慢慢吃");
   return { tags: t, style };
 }
@@ -172,7 +173,7 @@ function navigateToMap(url: string) {
 
 // 移除舊的 hardcoded buildMapsQuery，改用 AI 邏輯
 function buildMapsQuery(tags: string[]) {
-    // 這裡保留一個簡單版本作為 fallback，或者僅用於產生 tags 字串
+    // 這裡保留一個簡單版本作為 fallback
     return tags.join(" ");
 }
 
@@ -208,7 +209,6 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-// 修正 1: 補回 tease 和 onTeaseComplete 的定義，解決 TS2322 錯誤
 function SwipeableLogItem({ 
     item, 
     onReEat, 
@@ -343,7 +343,8 @@ function PillButton({ active, children, onClick }: { active: boolean; children: 
   );
 }
 
-function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longPressMs = 650 }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; subtle?: boolean; onLongPress?: () => void; longPressMs?: number; }) {
+// 修正：徹底移除了 onLongPress 和 longPressMs
+function PrimaryButton({ children, onClick, disabled, subtle }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; subtle?: boolean; }) {
   const solidStyle = {
     background: `linear-gradient(180deg, #FFB17A 0%, ${warm.orange} 100%)`,
     color: "#FFF",
@@ -435,7 +436,6 @@ function TopBar({ title, onBack, onOpenLog, showBack, showLog, onHome }: { title
   );
 }
 
-// 修正 2: 移除 statusText 參數，解決 TS6133 錯誤
 function EnergyCore({ 
   mode = "stable", 
   temp = null, 
@@ -947,7 +947,8 @@ export default function App() {
                   <div className="text-2xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>來覓食</div>
                   <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center", fontWeight: 400 }}>佛系覓食，點幾下就知道要吃什麼</div>
                   <div className="mt-8 flex flex-col items-center justify-center">
-                    <EnergyCore mode={log.length > 0 && log[0] ? (log[0].sig?.mode ?? "chaos") : "chaos"} temp={log.length > 0 && log[0] ? log[0].sig?.temp : null} richness={log.length > 0 && log[0] ? (log[0].sig?.richness ?? 0.5) : 0.5} size={220} imageUrl={currentAiImage || log[0]?.aiImageUrl} />
+                    {/* 首頁：如果 log 裡有圖，顯示 log 的圖 (currentAiImage 會被更新) */}
+                    {log.length > 0 && log[0] ? <EnergyCore mode={log[0].sig?.mode ?? "chaos"} temp={log[0].sig?.temp} richness={log[0].sig?.richness ?? 0.5} size={220} imageUrl={currentAiImage || log[0].aiImageUrl} /> : <EnergyCore mode="chaos" richness={0.5} size={220} imageUrl={currentAiImage} />}
                   </div>
                   {log.length > 0 && log[0] && (
                     <div className="mt-4 flex justify-center w-full px-8">
@@ -971,11 +972,11 @@ export default function App() {
                   </div>
                 </motion.div>
               )}
-
+{/* ... choose, recommend, energy, log screens ... */}
+              {/* 以下為 choose 畫面，為節省篇幅直接接續上文，請確保複製完整程式碼 */}
               {screen === "choose" && (
                 <motion.div key="choose" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
                   <div className="text-xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>做個輕鬆的選擇</div>
-                  {/* 3. 步驟點點可點擊 (onJump) */}
                   <ProgressDots step={chooseStep} total={totalChooseSteps} onJump={(s) => setChooseStep(s)} />
                   <div className="mt-8 space-y-4">
                     {chooseStep === 0 && (
@@ -994,7 +995,6 @@ export default function App() {
                     )}
                     {chooseStep === 2 && (
                       <>
-                        {/* 2. 統一介面風格 (移除外框，按鈕樣式一致) */}
                         <div className="mt-2">
                           <div className="flex items-center justify-between mb-2 px-1"><span className="text-xs" style={{ color: warm.sub }}>清爽</span><span className="text-xs" style={{ color: warm.sub }}>重口</span></div>
                           <div className="relative w-full h-6 mb-6 flex items-center">
@@ -1041,7 +1041,6 @@ export default function App() {
                   </div>
                   
                   <div className="mt-4 space-y-4">
-                    {/* 6. 顯示 AI 大廚正在思考的狀態 */}
                     {isChefAnalysing && (
                        <div className="py-8 text-center text-sm font-medium animate-pulse" style={{ color: warm.orange }}>
                           👩‍🍳 AI 大廚正在解析您的味蕾...
@@ -1125,7 +1124,6 @@ export default function App() {
                   <div className="mt-8 flex items-center justify-center"><EnergyCore mode="satisfied" temp={temp} richness={richness} size={240} imageUrl={currentAiImage} /></div>
                   <div className="mt-8 space-y-5">
                       <PrimaryButton onClick={() => setScreen("log")}>看我的食力</PrimaryButton>
-                      {/* 4. 弱化回首頁按鈕 */}
                       <PrimaryButton subtle onClick={goHome}>回到首頁</PrimaryButton>
                   </div>
                 </motion.div>
@@ -1198,7 +1196,6 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  {/* 4. 弱化回首頁按鈕 */}
                   <div className="absolute bottom-0 left-0 w-full px-6 pb-10 pt-12 space-y-5 pointer-events-none" style={{ background: "linear-gradient(to top, #FAF9F6 70%, rgba(250, 249, 246, 0.8) 85%, transparent 100%)" }}>
                     <div className="pointer-events-auto space-y-5"><PrimaryButton subtle onClick={goHome}>回首頁</PrimaryButton></div>
                   </div>
