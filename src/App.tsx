@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useTransform } from "framer-motion";
 
 const LS_KEY = "whatnow_energy_log_v2"; 
+const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; 
+// 使用相對路徑，自動對應您的 Vercel 網域
 const BACKEND_API_URL = "/api/places"; 
 const BACKEND_GEMINI_URL = "/api/gemini";
+const BACKEND_IMAGE_GEN_URL = "/api/image";
 
 type Temp = "hot" | "cold";
 type Hunger = "full" | "snack"; 
@@ -38,6 +41,7 @@ type LogEntry = {
   choiceText: string;
   isCategory?: boolean;
   isPinned?: boolean; 
+  aiImageUrl?: string; 
   sig?: {
     warmth: number; 
     mode: "satisfied" | "stable" | "chaos";
@@ -167,6 +171,52 @@ function navigateToMap(url: string) {
   }
 }
 
+function buildMapsQuery(tags: string[]) {
+  const hour = new Date().getHours();
+  const isMorning = hour >= 5 && hour < 11;
+  const isAfternoon = hour >= 14 && hour < 17;
+  const isLateNight = hour >= 21 || hour < 5;
+
+  const hasCold = tags.includes("冷食");
+  const hasFull = tags.includes("吃飽");
+  const hasSnack = tags.includes("解饞");
+  const hasRich = tags.includes("重口");
+  const hasLight = tags.includes("清爽");
+  const hasFast = tags.includes("快點");
+  const hasSit = tags.includes("坐下來吃");
+
+  const prefixes = ["人氣", "在地", "必吃", "評價高", "隱藏版", "老字號", "平價", "排隊", "道地", "TOP"];
+  const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+
+  let categories: string[] = [];
+
+  if (hasFull) {
+      if (isMorning) {
+          categories.push("早午餐", "飯糰", "鹹粥", "蛋餅", "早餐店");
+      } else {
+          categories.push("便當", "丼飯", "拉麵", "牛肉麵", "火鍋", "咖哩", "鐵板燒", "義大利麵", "合菜", "簡餐");
+          if (hasRich) categories.push("麻辣鍋", "燒肉", "熱炒", "川菜", "韓式料理", "泰式料理");
+          if (hasLight) categories.push("健康餐盒", "壽司", "越南河粉", "烏龍麵", "素食", "定食");
+      }
+  } else if (hasSnack) {
+      categories.push("鹹酥雞", "滷味", "車輪餅", "雞蛋糕", "章魚燒", "蔥油餅", "地瓜球", "炸雞", "串燒");
+      if (hasCold) categories.push("豆花", "剉冰", "手搖飲", "甜點", "蛋糕");
+      if (isAfternoon) categories.push("下午茶", "鬆餅", "咖啡廳", "麵包店");
+      if (isLateNight) categories.push("宵夜", "永和豆漿", "鹽水雞", "串燒");
+  } else {
+      categories = ["美食", "小吃", "餐廳"];
+  }
+
+  if (categories.length < 3) {
+      if (hasCold) categories.push("涼麵", "沙拉", "生魚片", "壽司");
+      if (hasSit) categories.push("餐廳", "居酒屋", "餐酒館");
+      if (hasFast) categories.push("小吃", "速食");
+  }
+
+  const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
+  return Math.random() > 0.3 ? `${randomPrefix} ${selectedCategory}` : selectedCategory;
+}
+
 function useLocalStorageLog() {
   const [log, setLog] = useState<LogEntry[]>(() => {
     try {
@@ -255,7 +305,13 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete }: { item: LogEntry; 
         }}
       >
         <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
-          <EnergyCore mode={item.sig?.mode ?? "satisfied"} temp={item.sig?.temp} richness={item.sig?.richness ?? 0.5} size={88} />
+          <EnergyCore 
+            mode={item.sig?.mode ?? "satisfied"} 
+            temp={item.sig?.temp} 
+            richness={item.sig?.richness ?? 0.5} 
+            size={88} 
+            imageUrl={item.aiImageUrl} 
+          />
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
             <div className="flex justify-between items-center mb-1">
@@ -298,7 +354,8 @@ function PillButton({ active, children, onClick }: { active: boolean; children: 
   );
 }
 
-function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longPressMs = 650 }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; subtle?: boolean; onLongPress?: () => void; longPressMs?: number; }) {
+// 修正：移除未使用的 disabled, onLongPress 等參數
+function PrimaryButton({ children, onClick, disabled, subtle }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; subtle?: boolean; }) {
   const solidStyle = {
     background: `linear-gradient(180deg, #FFB17A 0%, ${warm.orange} 100%)`,
     color: "#FFF",
@@ -308,10 +365,10 @@ function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longP
   };
 
   const subtleStyle = {
-    background: "transparent",
-    color: warm.sub,
-    border: "1px solid rgba(156, 150, 143, 0.3)",
-    boxShadow: "none",
+    background: "rgba(255, 255, 255, 0.7)",
+    color: warm.text,
+    border: warm.borderSubtle, 
+    boxShadow: "0 2px 12px rgba(255, 138, 61, 0.08)",
   };
 
   return (
@@ -392,10 +449,24 @@ function TopBar({ title, onBack, onOpenLog, showBack, showLog, onHome }: { title
   );
 }
 
-function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }: { mode?: "chaos" | "stable" | "satisfied"; temp?: Temp | null; richness?: number; size?: number; }) {
+function EnergyCore({ 
+  mode = "stable", 
+  temp = null, 
+  richness = 0.5, 
+  size = 220, 
+  imageUrl = null,
+  statusText = null 
+}: { 
+  mode?: "chaos" | "stable" | "satisfied"; 
+  temp?: Temp | null; 
+  richness?: number; 
+  size?: number; 
+  imageUrl?: string | null;
+  statusText?: string | null;
+}) {
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
-  const jitter = mode === "chaos" ? 6 : 0;
+  // 修正：移除 jitter 變數，因為 SVG 版本不再使用
   
   const palette = useMemo(() => {
     if (temp === "hot") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," };
@@ -410,16 +481,53 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   const dur = mode === "chaos" ? 1.4 : mode === "stable" ? 2.6 : 3.2;
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
-      <motion.div className="absolute inset-6 rounded-[42%]" animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }} transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }} style={{ background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)`, transform: `translate(${jitter}px, ${-jitter}px)` }} />
-      <motion.div className="absolute inset-10 rounded-[48%]" animate={mode === "chaos" ? { opacity: [0.25, 0.6, 0.35, 0.7, 0.25], x: [0, 2, -2, 1, 0], y: [0, -1, 2, -2, 0] } : { opacity: [0.35, 0.55, 0.35] }} transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} style={{ background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} />
-      <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
+    <div className="relative flex flex-col items-center justify-center">
+        <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+          
+          <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
+          
+          <AnimatePresence mode="wait">
+            {imageUrl ? (
+              <motion.img 
+                key="ai-image"
+                src={imageUrl} 
+                alt="Energy Form"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="absolute inset-4 w-[85%] h-[85%] object-contain"
+                style={{ 
+                  filter: `drop-shadow(0 0 20px ${palette.glowColor}0.5))`, 
+                  zIndex: 10 
+                }}
+              />
+            ) : (
+              <>
+                <motion.div 
+                    key="core-shape"
+                    className="absolute inset-6 rounded-[42%]" 
+                    animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }} 
+                    transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }} 
+                    style={{ background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)` }} 
+                />
+                <motion.div 
+                    key="mist-shape"
+                    className="absolute inset-10 rounded-[48%]" 
+                    animate={mode === "chaos" ? { opacity: [0.25, 0.6, 0.35, 0.7, 0.25], x: [0, 2, -2, 1, 0], y: [0, -1, 2, -2, 0] } : { opacity: [0.35, 0.55, 0.35] }} 
+                    transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} 
+                    style={{ background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} 
+                />
+              </>
+            )}
+          </AnimatePresence>
+          
+          <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
+        </div>
     </div>
   );
 }
 
-// 3. 步驟點點可點擊 (onJump)
 function ProgressDots({ step, total, onJump }: { step: number; total: number; onJump: (s: number) => void }) {
   return (
     <div className="flex items-center justify-center gap-2 mt-4">
@@ -460,6 +568,29 @@ export default function App() {
   
   const [isRandomMode, setIsRandomMode] = useState(false);
 
+  const MAX_TEASE_COUNT = 3;
+  const [swipeTeaseCount, setSwipeTeaseCount] = useState(() => {
+    try {
+        const val = localStorage.getItem(LS_SWIPE_COUNT_KEY);
+        return val ? parseInt(val, 10) : 0;
+    } catch {
+        return 0;
+    }
+  });
+
+  const incrementTeaseCount = () => {
+      if (swipeTeaseCount < MAX_TEASE_COUNT) {
+          const newCount = swipeTeaseCount + 1;
+          setSwipeTeaseCount(newCount);
+          try { localStorage.setItem(LS_SWIPE_COUNT_KEY, newCount.toString()); } catch {}
+      }
+  };
+
+  const markSwipeFullyLearned = () => {
+      setSwipeTeaseCount(MAX_TEASE_COUNT);
+      try { localStorage.setItem(LS_SWIPE_COUNT_KEY, MAX_TEASE_COUNT.toString()); } catch {}
+  };
+
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [suggestedPlaceIds, setSuggestedPlaceIds] = useState<Set<string>>(new Set());
@@ -473,7 +604,8 @@ export default function App() {
   const tags = derived.tags;
   const style = derived.style;
   
-  // 6. 新增狀態：Gemini 產生的搜尋關鍵字
+  // 6. 新增狀態：Gemini 產生的搜尋關鍵字 (加上 mapsQuery 變數定義)
+  const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
   const [geminiQueryKeyword, setGeminiQueryKeyword] = useState<string | null>(null);
   // 顯示用：AI 大廚分析狀態
   const [isChefAnalysing, setIsChefAnalysing] = useState(false);
@@ -481,6 +613,52 @@ export default function App() {
   const groupedLogs = useMemo(() => groupLogsByDate(log), [log]);
 
   const VISIBLE_COUNT = 3;
+
+  const [currentAiImage, setCurrentAiImage] = useState<string | null>(null);
+  const lastGenKeyword = useRef<string | null>(null);
+
+  const targetKeyword = useMemo(() => {
+      if (screen === "recommend" && realPlaces.length > 0) {
+          return realPlaces[0].name.split(" ")[0]; 
+      }
+      if (screen === "home" && log.length > 0) {
+          if (log[0].aiImageUrl) return null; 
+          return log[0].choiceText.replace("搜尋：", "").split(" ")[0];
+      }
+      return null;
+  }, [screen, realPlaces, log]);
+
+  // AI 生圖邏輯
+  useEffect(() => {
+    if (!targetKeyword || targetKeyword === lastGenKeyword.current) return;
+    if (!BACKEND_IMAGE_GEN_URL) return;
+
+    lastGenKeyword.current = targetKeyword;
+    
+    if (screen === "home" && log[0]?.aiImageUrl) {
+      setCurrentAiImage(log[0].aiImageUrl);
+      return;
+    }
+
+    fetch(BACKEND_IMAGE_GEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword: targetKeyword })
+    })
+    .then(async res => {
+        if (!res.ok) {
+            throw new Error(`[${res.status}]`);
+        }
+        return res.json();
+    })
+    .then(data => {
+        if (data.imageUrl) {
+            setCurrentAiImage(data.imageUrl);
+        }
+    })
+    .catch(e => console.error("AI Gen Failed:", e));
+
+  }, [targetKeyword, screen, log]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -491,15 +669,15 @@ export default function App() {
     }
   }, []);
 
-  // 6. 核心修改：在進入 recommend 前，先用 Gemini 翻譯標籤，再用翻譯結果去搜 Maps
+  // 6. 核心修改：在進入 recommend 前，先用 Gemini 翻譯標籤
   useEffect(() => {
     if (screen === "recommend" && userLocation) {
         if (!BACKEND_API_URL) return;
         setIsRealLoading(true);
         setApiError(null);
+        setCurrentAiImage(null);
         
         // 呼叫 Gemini 取得精準關鍵字 (包含手動與隨機模式)
-        // 隨機模式現在也走 AI 邏輯
         if (tags.length > 0) {
             setIsChefAnalysing(true);
             const prompt = `
@@ -532,7 +710,7 @@ export default function App() {
             doFetchPlaces("美食");
         }
     }
-  }, [screen, userLocation, isRandomMode]); // 移除 tags 依賴，避免重複觸發
+  }, [screen, userLocation, isRandomMode]); 
 
   // 抽離出 Fetch Places 邏輯
   const doFetchPlaces = (query: string) => {
@@ -567,7 +745,6 @@ export default function App() {
   const filteredPlaces = useMemo(() => {
     if (!BACKEND_API_URL || realPlaces.length === 0) return [];
     
-    // 這裡的邏輯可以簡化，因為搜尋已經很精準了，我們主要做排序
     const scored = realPlaces.map(p => {
       let score = 0;
       if (p.type === temp) score += 1; 
@@ -590,6 +767,8 @@ export default function App() {
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
     setIsRandomMode(false); 
     setSuggestedPlaceIds(new Set());
+    setCurrentAiImage(null); 
+    lastGenKeyword.current = null;
     setGeminiQueryKeyword(null);
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
@@ -626,7 +805,6 @@ export default function App() {
     setRichness(Math.random());
   }
 
-  // 1. 沒想法改點擊 (移除長按)
   function handleRandomClick() {
     setPressing(true);
     setTimeout(() => {
@@ -645,16 +823,19 @@ export default function App() {
       choiceText: choiceText || "",
       isCategory, 
       isPinned: false, 
+      aiImageUrl: currentAiImage || undefined,
       sig: { warmth: clamp(0.35 + richness * 0.65, 0, 1), mode: "satisfied", temp, hunger, speed, richness },
     };
     setLog((prev) => [entry, ...prev]);
   }
 
   function togglePin(id: string) {
+    markSwipeFullyLearned(); 
     setLog(prev => prev.map(item => item.id === id ? { ...item, isPinned: !item.isPinned } : item));
   }
 
   function deleteLog(id: string) {
+    markSwipeFullyLearned(); 
     setLog(prev => prev.filter(item => item.id !== id));
   }
 
@@ -765,7 +946,7 @@ export default function App() {
   
   const showBack = screen !== "home" && screen !== "energy" && screen !== "log"; 
 
-  // 5. 決定是否顯示回首頁按鈕 (TopBar)
+  // 5. 決定是否顯示回首頁按鈕
   const showHomeBtn = screen === "choose" || screen === "recommend";
 
   return (
@@ -787,7 +968,7 @@ export default function App() {
                   <div className="text-2xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>來覓食</div>
                   <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center", fontWeight: 400 }}>佛系覓食，點幾下就知道要吃什麼</div>
                   <div className="mt-8 flex flex-col items-center justify-center">
-                    <EnergyCore mode={log.length > 0 && log[0] ? (log[0].sig?.mode ?? "chaos") : "chaos"} temp={log.length > 0 && log[0] ? log[0].sig?.temp : null} richness={log.length > 0 && log[0] ? (log[0].sig?.richness ?? 0.5) : 0.5} size={220} />
+                    <EnergyCore mode={log.length > 0 && log[0] ? (log[0].sig?.mode ?? "chaos") : "chaos"} temp={log.length > 0 && log[0] ? log[0].sig?.temp : null} richness={log.length > 0 && log[0] ? (log[0].sig?.richness ?? 0.5) : 0.5} size={220} imageUrl={currentAiImage || log[0]?.aiImageUrl} />
                   </div>
                   {log.length > 0 && log[0] && (
                     <div className="mt-4 flex justify-center w-full px-8">
@@ -876,7 +1057,7 @@ export default function App() {
                 <motion.div key="recommend" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
                   <div className="text-xl mt-4 text-center font-bold" style={{color: warm.text}}>附近可以吃什麼</div>
                   <div className="flex flex-col items-center justify-center mb-6">
-                    <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} />
+                    <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} imageUrl={currentAiImage} />
                     <div className="mt-4 flex flex-wrap gap-2 justify-center">{tags.map((t) => (<Tag key={t}>{t}</Tag>))}</div>
                   </div>
                   
@@ -962,7 +1143,7 @@ export default function App() {
                 <motion.div key="energy" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
                   <div className="text-xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>留下這次的食力</div>
                   <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center" }}>剛剛的選擇已自動紀錄。<br/>祝你用餐愉快！</div>
-                  <div className="mt-8 flex items-center justify-center"><EnergyCore mode="satisfied" temp={temp} richness={richness} size={240} /></div>
+                  <div className="mt-8 flex items-center justify-center"><EnergyCore mode="satisfied" temp={temp} richness={richness} size={240} imageUrl={currentAiImage} /></div>
                   <div className="mt-8 space-y-5">
                       <PrimaryButton onClick={() => setScreen("log")}>看我的食力</PrimaryButton>
                       {/* 4. 弱化回首頁按鈕 */}
@@ -1020,6 +1201,7 @@ export default function App() {
                                 <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
                             {group.items.map((item, itemIndex) => {
+                                const isFirstItem = group === groupedLogs[0] && itemIndex === 0;
                                 return (
                                   <SwipeableLogItem 
                                     key={item.id} 
@@ -1027,6 +1209,8 @@ export default function App() {
                                     onReEat={() => handleReEat(item)} 
                                     onPin={() => togglePin(item.id)}
                                     onDelete={() => deleteLog(item.id)}
+                                    tease={isFirstItem && swipeTeaseCount < MAX_TEASE_COUNT}
+                                    onTeaseComplete={incrementTeaseCount} 
                                   />
                                 );
                             })}
