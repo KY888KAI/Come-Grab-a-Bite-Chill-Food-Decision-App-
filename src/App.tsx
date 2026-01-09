@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
 const LS_KEY = "whatnow_energy_log_v2"; 
-const LS_SWIPE_LEARNED_KEY = "whatnow_swipe_learned"; // 新增：紀錄是否學會滑動的 Key
+const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; // 改名：紀錄「導引次數」
 const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
 const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
 
@@ -249,12 +249,12 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void; tease?: boolean }) {
+function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTeaseComplete }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void; tease?: boolean; onTeaseComplete?: () => void }) {
   const x = useMotionValue(0);
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
   const [isDragging, setIsDragging] = useState(false);
 
-  // 智慧暗示：如果是第一筆且沒學過，就自動晃動一下
+  // 智慧暗示：如果是第一筆且次數未達上限，就自動晃動
   useEffect(() => {
     if (tease) {
         // 優化動畫：更優雅的滑動展示 (Peek)
@@ -264,11 +264,15 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { i
             duration: 2.2,
             ease: "easeInOut",
             delay: 0.8, // 進場後等一下再開始，不要嚇到人
-            times: [0, 0.2, 0.35, 0.5, 0.65, 0.8, 1] 
+            times: [0, 0.2, 0.35, 0.5, 0.65, 0.8, 1],
+            onComplete: () => {
+                // 動畫播完，通知上層增加一次「已看過」計數
+                if (onTeaseComplete) onTeaseComplete();
+            }
         });
         return () => controls.stop();
     }
-  }, [tease, x]);
+  }, [tease, x, onTeaseComplete]);
 
   return (
     <div className="relative mb-3 group">
@@ -333,8 +337,6 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { i
                 )}
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-            
-            {/* 優化：flex-wrap 允許換行，gap-1 縮小間距，確保整齊 */}
             <div className="flex flex-wrap gap-1 w-full">
                 {item.tags?.slice(0, 3).map((t) => (
                   <Tag key={t}>{t}</Tag>
@@ -455,6 +457,7 @@ function TopBar({ title, onBack, onOpenLog, showBack, showLog }: { title: string
   );
 }
 
+// 恢復為原本穩定、圓潤的 EnergyCore 版本 (無變形)
 function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }: { mode?: "chaos" | "stable" | "satisfied"; temp?: Temp | null; richness?: number; size?: number; }) {
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
@@ -509,20 +512,30 @@ export default function App() {
   // 新增狀態：是否為隨機模式 (長按進入)
   const [isRandomMode, setIsRandomMode] = useState(false);
 
-  // 紀錄使用者是否已經學會滑動操作
-  const [hasLearnedSwipe, setHasLearnedSwipe] = useState(() => {
+  // UX 核心修改：使用計次機制 (Rule of 3)
+  const MAX_TEASE_COUNT = 3;
+  const [swipeTeaseCount, setSwipeTeaseCount] = useState(() => {
     try {
-        return !!localStorage.getItem(LS_SWIPE_LEARNED_KEY);
+        const val = localStorage.getItem(LS_SWIPE_COUNT_KEY);
+        return val ? parseInt(val, 10) : 0;
     } catch {
-        return false;
+        return 0;
     }
   });
 
-  const markSwipeLearned = () => {
-      if (!hasLearnedSwipe) {
-          setHasLearnedSwipe(true);
-          try { localStorage.setItem(LS_SWIPE_LEARNED_KEY, "true"); } catch {}
+  const incrementTeaseCount = () => {
+      // 只有在還沒滿 3 次時才增加
+      if (swipeTeaseCount < MAX_TEASE_COUNT) {
+          const newCount = swipeTeaseCount + 1;
+          setSwipeTeaseCount(newCount);
+          try { localStorage.setItem(LS_SWIPE_COUNT_KEY, newCount.toString()); } catch {}
       }
+  };
+
+  const markSwipeFullyLearned = () => {
+      // 使用者已經手動操作了，直接設為上限，以後不用再教
+      setSwipeTeaseCount(MAX_TEASE_COUNT);
+      try { localStorage.setItem(LS_SWIPE_COUNT_KEY, MAX_TEASE_COUNT.toString()); } catch {}
   };
 
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
@@ -673,12 +686,12 @@ export default function App() {
   }
 
   function togglePin(id: string) {
-    markSwipeLearned(); // 使用者成功操作了釘選，代表學會了
+    markSwipeFullyLearned(); // 使用者主動操作，視為完全學會
     setLog(prev => prev.map(item => item.id === id ? { ...item, isPinned: !item.isPinned } : item));
   }
 
   function deleteLog(id: string) {
-    markSwipeLearned(); // 使用者成功操作了刪除，代表學會了
+    markSwipeFullyLearned(); // 使用者主動操作，視為完全學會
     setLog(prev => prev.filter(item => item.id !== id));
   }
 
@@ -1008,7 +1021,7 @@ export default function App() {
                             {group.items.map((item, itemIndex) => {
                                 // 判斷這是不是整個列表的第一個項目
                                 // 因為有分組，我們需要一個簡單的邏輯：
-                                // 如果是第一個群組的第一個項目，而且使用者還沒學會滑動，就觸發 tease
+                                // 如果是第一個群組的第一個項目，而且使用者看過的次數少於上限 (3次)，就觸發 tease
                                 const isFirstItem = group === groupedLogs[0] && itemIndex === 0;
                                 return (
                                   <SwipeableLogItem 
@@ -1017,7 +1030,8 @@ export default function App() {
                                     onReEat={() => handleReEat(item)} 
                                     onPin={() => togglePin(item.id)}
                                     onDelete={() => deleteLog(item.id)}
-                                    tease={isFirstItem && !hasLearnedSwipe}
+                                    tease={isFirstItem && swipeTeaseCount < MAX_TEASE_COUNT}
+                                    onTeaseComplete={incrementTeaseCount} // 動畫播完就增加計數
                                   />
                                 );
                             })}
