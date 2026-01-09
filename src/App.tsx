@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
 const LS_KEY = "whatnow_energy_log_v2"; 
-const LS_SWIPE_LEARNED_KEY = "whatnow_swipe_learned"; // 新增：紀錄是否學會滑動的 Key
-const BACKEND_API_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/places"; 
-const BACKEND_GEMINI_URL = "https://come-grab-a-bite-chill-food-decision.vercel.app/api/gemini";
+const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; 
+// 使用相對路徑，自動對應您的 Vercel 網域
+const BACKEND_API_URL = "/api/places"; 
+const BACKEND_GEMINI_URL = "/api/gemini";
 
 type Temp = "hot" | "cold";
 type Hunger = "full" | "snack"; 
@@ -55,7 +56,6 @@ type AiSuggestion = {
   targetPlace?: Place;
 } | null;
 
-// --- 視覺風格系統 ---
 const warm = {
   bg: "#FAF9F6", 
   text: "#595048", 
@@ -231,12 +231,9 @@ function useLocalStorageLog() {
   return { log, setLog } as const;
 }
 
-// --- UI Components ---
-
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
-      // 優化：text-[11px] 縮小字體, px-2 py-0.5 緊湊內距, whitespace-nowrap 不斷行
       className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tracking-wide whitespace-nowrap"
       style={{
         background: "rgba(255, 211, 106, 0.15)", 
@@ -249,26 +246,25 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void; tease?: boolean }) {
+function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTeaseComplete }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void; tease?: boolean; onTeaseComplete?: () => void }) {
   const x = useMotionValue(0);
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
   const [isDragging, setIsDragging] = useState(false);
 
-  // 智慧暗示：如果是第一筆且沒學過，就自動晃動一下
   useEffect(() => {
     if (tease) {
-        // 優化動畫：更優雅的滑動展示 (Peek)
-        // 1. 變慢：總時長拉到 2.2秒
-        // 2. 停頓：在露出紅色和橘色時稍微停一下，讓使用者看清楚
         const controls = animate(x, [0, -60, -60, 0, 60, 60, 0], {
             duration: 2.2,
             ease: "easeInOut",
-            delay: 0.8, // 進場後等一下再開始，不要嚇到人
-            times: [0, 0.2, 0.35, 0.5, 0.65, 0.8, 1] 
+            delay: 0.8, 
+            times: [0, 0.2, 0.35, 0.5, 0.65, 0.8, 1],
+            onComplete: () => {
+                if (onTeaseComplete) onTeaseComplete();
+            }
         });
         return () => controls.stop();
     }
-  }, [tease, x]);
+  }, [tease, x, onTeaseComplete]);
 
   return (
     <div className="relative mb-3 group">
@@ -321,7 +317,12 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { i
         }}
       >
         <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
-          <EnergyCore mode={item.sig?.mode ?? "satisfied"} temp={item.sig?.temp} richness={item.sig?.richness ?? 0.5} size={88} />
+          <EnergyCore 
+            mode={item.sig?.mode ?? "satisfied"} 
+            temp={item.sig?.temp} 
+            richness={item.sig?.richness ?? 0.5} 
+            size={88} 
+          />
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
             <div className="flex justify-between items-center mb-1">
@@ -333,8 +334,6 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false }: { i
                 )}
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-            
-            {/* 優化：flex-wrap 允許換行，gap-1 縮小間距，確保整齊 */}
             <div className="flex flex-wrap gap-1 w-full">
                 {item.tags?.slice(0, 3).map((t) => (
                   <Tag key={t}>{t}</Tag>
@@ -473,11 +472,28 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   const dur = mode === "chaos" ? 1.4 : mode === "stable" ? 2.6 : 3.2;
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
-      <motion.div className="absolute inset-6 rounded-[42%]" animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }} transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }} style={{ background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)`, transform: `translate(${jitter}px, ${-jitter}px)` }} />
-      <motion.div className="absolute inset-10 rounded-[48%]" animate={mode === "chaos" ? { opacity: [0.25, 0.6, 0.35, 0.7, 0.25], x: [0, 2, -2, 1, 0], y: [0, -1, 2, -2, 0] } : { opacity: [0.35, 0.55, 0.35] }} transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} style={{ background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} />
-      <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
+    <div className="relative flex flex-col items-center justify-center">
+        <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+          
+          <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
+          
+            <motion.div 
+                key="core-shape"
+                className="absolute inset-6 rounded-[42%]" 
+                animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }} 
+                transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }} 
+                style={{ background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)`, transform: `translate(${jitter}px, ${-jitter}px)` }} 
+            />
+            <motion.div 
+                key="mist-shape"
+                className="absolute inset-10 rounded-[48%]" 
+                animate={mode === "chaos" ? { opacity: [0.25, 0.6, 0.35, 0.7, 0.25], x: [0, 2, -2, 1, 0], y: [0, -1, 2, -2, 0] } : { opacity: [0.35, 0.55, 0.35] }} 
+                transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} 
+                style={{ background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} 
+            />
+          
+          <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
+        </div>
     </div>
   );
 }
@@ -506,27 +522,34 @@ export default function App() {
   const pressTimer = useRef<number | null>(null);
   const [pressing, setPressing] = useState(false);
   
-  // 新增狀態：是否為隨機模式 (長按進入)
   const [isRandomMode, setIsRandomMode] = useState(false);
 
-  // 紀錄使用者是否已經學會滑動操作
-  const [hasLearnedSwipe, setHasLearnedSwipe] = useState(() => {
+  const MAX_TEASE_COUNT = 3;
+  const [swipeTeaseCount, setSwipeTeaseCount] = useState(() => {
     try {
-        return !!localStorage.getItem(LS_SWIPE_LEARNED_KEY);
+        const val = localStorage.getItem(LS_SWIPE_COUNT_KEY);
+        return val ? parseInt(val, 10) : 0;
     } catch {
-        return false;
+        return 0;
     }
   });
 
-  const markSwipeLearned = () => {
-      if (!hasLearnedSwipe) {
-          setHasLearnedSwipe(true);
-          try { localStorage.setItem(LS_SWIPE_LEARNED_KEY, "true"); } catch {}
+  const incrementTeaseCount = () => {
+      if (swipeTeaseCount < MAX_TEASE_COUNT) {
+          const newCount = swipeTeaseCount + 1;
+          setSwipeTeaseCount(newCount);
+          try { localStorage.setItem(LS_SWIPE_COUNT_KEY, newCount.toString()); } catch {}
       }
+  };
+
+  const markSwipeFullyLearned = () => {
+      setSwipeTeaseCount(MAX_TEASE_COUNT);
+      try { localStorage.setItem(LS_SWIPE_COUNT_KEY, MAX_TEASE_COUNT.toString()); } catch {}
   };
 
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [suggestedPlaceIds, setSuggestedPlaceIds] = useState<Set<string>>(new Set());
 
   const [realPlaces, setRealPlaces] = useState<Place[]>([]);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
@@ -608,7 +631,8 @@ export default function App() {
   function resetFlow() {
     setChooseStep(0); setTemp(null); setHunger(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
-    setIsRandomMode(false); // 重置時預設為非隨機模式
+    setIsRandomMode(false); 
+    setSuggestedPlaceIds(new Set());
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
@@ -621,7 +645,6 @@ export default function App() {
       return;
     }
     if (screen === "recommend") {
-        // 修正 UX: 如果是隨機模式進來的，按返回直接回首頁，不顯示選擇步驟
         if (isRandomMode) return goHome();
         return setScreen("choose"); 
     }
@@ -632,7 +655,7 @@ export default function App() {
 
   function startDecision() { 
       resetFlow(); 
-      setIsRandomMode(false); // 手動開始
+      setIsRandomMode(false); 
       setScreen("choose"); 
   }
   
@@ -652,7 +675,7 @@ export default function App() {
         randomizeAll(); 
         setPressing(false); 
         pressTimer.current = null; 
-        setIsRandomMode(true); // 設定為隨機模式
+        setIsRandomMode(true); 
         setScreen("recommend"); 
     }, 650);
   }
@@ -666,19 +689,19 @@ export default function App() {
       tags,
       choiceText: choiceText || "",
       isCategory, 
-      isPinned: false, // 預設不置頂
+      isPinned: false, 
       sig: { warmth: clamp(0.35 + richness * 0.65, 0, 1), mode: "satisfied", temp, hunger, speed, richness },
     };
     setLog((prev) => [entry, ...prev]);
   }
 
   function togglePin(id: string) {
-    markSwipeLearned(); // 使用者成功操作了釘選，代表學會了
+    markSwipeFullyLearned(); 
     setLog(prev => prev.map(item => item.id === id ? { ...item, isPinned: !item.isPinned } : item));
   }
 
   function deleteLog(id: string) {
-    markSwipeLearned(); // 使用者成功操作了刪除，代表學會了
+    markSwipeFullyLearned(); 
     setLog(prev => prev.filter(item => item.id !== id));
   }
 
@@ -687,7 +710,6 @@ export default function App() {
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     const url = getGoogleMapsUrl(name, placeId); 
     
-    // 立即記錄並跳轉，不等待 (手機體驗優先)
     saveEnergy(name, false); 
     setScreen("energy");
     navigateToMap(url);
@@ -714,12 +736,23 @@ export default function App() {
 
     let targetPlace: Place | null = null;
     
-    const hiddenCandidates = filteredPlaces.slice(VISIBLE_COUNT);
+    const availableCandidates = filteredPlaces.filter(p => !suggestedPlaceIds.has(p.id));
+    const hiddenCandidates = availableCandidates.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
 
     if (hiddenCandidates.length > 0) {
-        targetPlace = hiddenCandidates[Math.floor(Math.random() * Math.min(5, hiddenCandidates.length))];
-    } else if (filteredPlaces.length > 0) {
+        targetPlace = hiddenCandidates[Math.floor(Math.random() * hiddenCandidates.length)];
+    } else if (availableCandidates.length > 0) {
+        targetPlace = availableCandidates[Math.floor(Math.random() * availableCandidates.length)];
+    } else {
         targetPlace = filteredPlaces[Math.floor(Math.random() * filteredPlaces.length)];
+    }
+
+    if (targetPlace) {
+        setSuggestedPlaceIds(prev => {
+            const next = new Set(prev);
+            next.add(targetPlace!.id);
+            return next;
+        });
     }
 
     let prompt = "";
@@ -776,7 +809,6 @@ export default function App() {
 
   const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" } as const;
   
-  // UX 修改：energy 和 log 頁面都不顯示返回鍵
   const showBack = screen !== "home" && screen !== "energy" && screen !== "log"; 
 
   return (
@@ -787,7 +819,6 @@ export default function App() {
             onBack={goBack} 
             onOpenLog={() => setScreen("log")} 
             showBack={showBack} 
-            // 修正：在 energy 和 log 頁面時隱藏「回顧食力」按鈕
             showLog={log.length > 0 && screen !== "energy" && screen !== "log"} 
         />
         <div className="px-4 pt-4">
@@ -798,7 +829,7 @@ export default function App() {
                   <div className="text-2xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>來覓食</div>
                   <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center", fontWeight: 400 }}>佛系覓食，點幾下就知道要吃什麼</div>
                   <div className="mt-8 flex flex-col items-center justify-center">
-                    {log.length > 0 && log[0] ? <EnergyCore mode={log[0].sig?.mode ?? "chaos"} temp={log[0].sig?.temp} richness={log[0].sig?.richness ?? 0.5} size={220} /> : <EnergyCore mode="chaos" richness={0.5} size={220} />}
+                    <EnergyCore mode={log.length > 0 && log[0] ? (log[0].sig?.mode ?? "chaos") : "chaos"} temp={log.length > 0 && log[0] ? log[0].sig?.temp : null} richness={log.length > 0 && log[0] ? (log[0].sig?.richness ?? 0.5) : 0.5} size={220} />
                   </div>
                   {log.length > 0 && log[0] && (
                     <div className="mt-4 flex justify-center w-full px-8">
@@ -813,7 +844,6 @@ export default function App() {
                     <button onMouseDown={handlePressDown} onMouseUp={handlePressUp} onMouseLeave={handlePressUp} onTouchStart={handlePressDown} onTouchEnd={handlePressUp} className="w-full rounded-2xl px-4 py-4 transition overflow-hidden relative" style={{ border: warm.border, background: pressing ? "linear-gradient(135deg, rgba(255,138,61,0.18) 0%, rgba(255,211,106,0.22) 100%)" : "rgba(255,255,255,0.75)", boxShadow: pressing ? warm.shadowActive : warm.shadow }}>
                       <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>沒想法</div>
                       <div className="relative z-10 mt-1 text-sm" style={{ color: warm.sub, textAlign: "center" }}>長按一下，隨緣覓食</div>
-                        {/* 增加流光質感 */}
                         <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
                     </button>
                   </div>
@@ -843,7 +873,6 @@ export default function App() {
                       <>
                         <div className="mt-2 rounded-2xl p-5" style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.5)" }}>
                           <div className="flex items-center justify-between"><span className="text-xs" style={{ color: warm.sub }}>清爽</span><span className="text-xs" style={{ color: warm.sub }}>重口</span></div>
-                          {/* 美化拉條：客製化 Slider - 移除 transition-all 解決卡頓 */}
                           <div className="relative w-full h-6 mt-4 mb-2 flex items-center">
                             <div className="absolute w-full h-2 rounded-full overflow-hidden" style={{ background: "linear-gradient(90deg, #FAD961 0%, #F76B1C 100%)", opacity: 0.3 }}></div>
                             <input 
@@ -922,6 +951,8 @@ export default function App() {
                       <motion.button whileTap={{ scale: 0.98 }} onClick={callGeminiChef} disabled={isAiLoading} className="w-full rounded-2xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)", border: "1px dashed rgba(255,159,94,0.4)", color: warm.text }}>
                         {isAiLoading ? (
                           <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl">✨</span><span className="font-bold text-sm">AI 大廚正在思考...</span></div>
+                        ) : aiSuggestion ? (
+                           <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>↻</span> 還是不滿意？再試一次</div>
                         ) : (
                           <>
                             <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>✨</span> 都不滿意？讓 AI 大廚幫你挑</div>
@@ -933,11 +964,15 @@ export default function App() {
                       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl p-5 mb-4 text-left" style={{ background: "rgba(255,255,255,0.9)", border: `1px solid ${warm.orange}`, boxShadow: warm.shadowActive }}>
                         <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider">✨ AI 專屬推薦</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
                         <div className="text-lg font-bold mb-1" style={{color: warm.text}}>{aiSuggestion.dish}</div>
+                        {aiSuggestion.targetPlace && (
+                            <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>
+                                {aiSuggestion.targetPlace.distance} ・ <span style={{color: warm.orange}}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : '無評分'}</span>
+                            </div>
+                        )}
                         <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{color: "#6B5D52"}}>{aiSuggestion.reason}</div>
                         <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>出發去吃！ →</PrimaryButton>
                       </motion.div>
                     )}
-                    {/* 1. 修復：沒看到想吃的按鈕邊框 */}
                     <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
                       <div className="text-sm opacity-60 font-medium">還是沒看到想吃的？</div>
                       <div className="text-sm opacity-90"><span className="underline font-bold" style={{textUnderlineOffset: 3}}>在地圖搜尋「{mapsQuery}」</span></div>
@@ -959,7 +994,6 @@ export default function App() {
                 <motion.div key="log" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-0 h-[600px] flex flex-col">
                   <div className="px-6 pt-8 pb-2 flex items-end justify-between gap-3 shrink-0">
                     <div><div className="text-xl" style={{ fontWeight: 700, letterSpacing: "0.02em" }}>我的食力</div><div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>回顧每一次的美味選擇</div></div>
-                    {/* 2. 修復：清空按鈕邊框 + 防呆 */}
                     <button 
                         className="rounded-xl px-3 py-2 text-xs font-medium transition-opacity disabled:opacity-50" 
                         style={{ border: warm.borderAction, background: "rgba(255,255,255,0.5)", color: warm.orange }} 
@@ -980,7 +1014,6 @@ export default function App() {
                   </div>
                   <div className="flex-1 overflow-y-auto relative px-6">
                     <div className="pt-4 pb-44 space-y-3">
-                      {/* 新增：分組顯示 */}
                       {groupedLogs.length === 0 ? (
                         <div className="rounded-2xl p-6 mt-4 text-center" style={{ border: "1px dashed rgba(255,138,61,0.3)", background: "rgba(255,211,106,0.08)" }}>
                           <div className="text-base font-bold" style={{color: warm.text}}>還沒有食力</div><div className="mt-2 text-sm text-gray-500">這裡會記錄你所有的覓食歷程</div>
@@ -1006,9 +1039,6 @@ export default function App() {
                                 <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
                             {group.items.map((item, itemIndex) => {
-                                // 判斷這是不是整個列表的第一個項目
-                                // 因為有分組，我們需要一個簡單的邏輯：
-                                // 如果是第一個群組的第一個項目，而且使用者還沒學會滑動，就觸發 tease
                                 const isFirstItem = group === groupedLogs[0] && itemIndex === 0;
                                 return (
                                   <SwipeableLogItem 
@@ -1017,7 +1047,8 @@ export default function App() {
                                     onReEat={() => handleReEat(item)} 
                                     onPin={() => togglePin(item.id)}
                                     onDelete={() => deleteLog(item.id)}
-                                    tease={isFirstItem && !hasLearnedSwipe}
+                                    tease={isFirstItem && swipeTeaseCount < MAX_TEASE_COUNT}
+                                    onTeaseComplete={incrementTeaseCount} 
                                   />
                                 );
                             })}
@@ -1026,9 +1057,7 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  {/* 3. 修復：底部間距問題，增加 pb-10 避免貼底 */}
                   <div className="absolute bottom-0 left-0 w-full px-6 pb-10 pt-12 space-y-5 pointer-events-none" style={{ background: "linear-gradient(to top, #FAF9F6 70%, rgba(250, 249, 246, 0.8) 85%, transparent 100%)" }}>
-                    {/* UX 修改：移除「再覓食一次」，僅保留「回首頁」並升級為 PrimaryButton */}
                     <div className="pointer-events-auto space-y-5"><PrimaryButton onClick={goHome}>回首頁</PrimaryButton></div>
                   </div>
                 </motion.div>
@@ -1040,5 +1069,3 @@ export default function App() {
     </div>
   );
 }
-}
-
