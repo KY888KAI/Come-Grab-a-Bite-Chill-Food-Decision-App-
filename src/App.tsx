@@ -1,6 +1,121 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
+// --- 多語言字典 (i18n) ---
+const TRANSLATIONS = {
+  zh: {
+    appTitle: "來覓食",
+    appSubtitle: "佛系覓食，點幾下就知道要吃什麼",
+    startBtn: "開始覓食",
+    randomBtn: "沒想法",
+    randoming: "隨緣覓食中...",
+    stepTitle: "做個輕鬆的選擇",
+    light: "清淡點",
+    rich: "重口味",
+    full: "吃飽",
+    snack: "解饞",
+    cheap: "隨便吃吃",
+    expensive: "犒賞自己",
+    next: "下一步",
+    finish: "完成",
+    recommendTitle: "附近可以吃什麼",
+    searching: "正在搜尋附近的美味...",
+    expanding: "擴大搜尋範圍中",
+    notFound: "附近找不到符合條件的店",
+    aiThinking: "AI 大廚正在思考...",
+    aiRetry: "還是不滿意？再試一次",
+    aiHelp: "都不滿意？讓 AI 大廚幫你挑",
+    aiTag: "AI 專屬推薦",
+    goNav: "出發去吃！ →",
+    manualSearch: "還是沒看到想吃的？",
+    manualSearchHint: "在地圖搜尋",
+    saveTitle: "留下這次的食力",
+    saveDesc: "剛剛的選擇已自動紀錄。\n祝你用餐愉快！",
+    viewLog: "看我的食力",
+    backHome: "回到首頁",
+    logTitle: "我的食力",
+    logSubtitle: "回顧每一次的美味選擇",
+    emptyLog: "還沒有食力",
+    emptyLogDesc: "這裡會記錄你所有的覓食歷程",
+    lastEat: "上次吃",
+    pinned: "釘選置頂",
+    today: "今天",
+    yesterday: "昨天",
+    older: "更早之前",
+    confirmDelete: "確定要刪除這筆紀錄嗎？",
+    confirmPin: "確定要取消這筆紀錄的釘選嗎？",
+    confirmClear: "確定要清空所有紀錄嗎？此動作無法復原。",
+    actionPin: "釘選",
+    actionDelete: "刪除",
+    subtitles: {
+      home: "Come Grab a Bite",
+      choose: "做個輕鬆的選擇",
+      recommend: "附近可以吃什麼",
+      energy: "留下這次的食力",
+      log: "我的食力"
+    }
+  },
+  en: {
+    appTitle: "Grab a Bite",
+    appSubtitle: "Chill food decision in a few taps.",
+    startBtn: "Start",
+    randomBtn: "I'm feeling lucky",
+    randoming: "Randomizing...",
+    stepTitle: "Make a Choice",
+    light: "Light",
+    rich: "Rich",
+    full: "Meal",
+    snack: "Snack",
+    cheap: "Budget",
+    expensive: "Fancy",
+    next: "Next",
+    finish: "Done",
+    recommendTitle: "What's Nearby",
+    searching: "Searching for delicious food...",
+    expanding: "Expanding search radius",
+    notFound: "No places found matching your criteria.",
+    aiThinking: "AI Chef is thinking...",
+    aiRetry: "Not happy? Try again",
+    aiHelp: "Let AI Chef decide for you",
+    aiTag: "AI Recommendation",
+    goNav: "Let's Go! →",
+    manualSearch: "Still not what you want?",
+    manualSearchHint: "Search on Maps",
+    saveTitle: "Choice Recorded",
+    saveDesc: "Your choice has been saved.\nBon appétit!",
+    viewLog: "View History",
+    backHome: "Back Home",
+    logTitle: "My History",
+    logSubtitle: "Review your delicious choices",
+    emptyLog: "No History Yet",
+    emptyLogDesc: "Your food journey will appear here.",
+    lastEat: "Last Ate",
+    pinned: "Pinned",
+    today: "Today",
+    yesterday: "Yesterday",
+    older: "Older",
+    confirmDelete: "Delete this record?",
+    confirmPin: "Unpin this record?",
+    confirmClear: "Clear all history? This cannot be undone.",
+    actionPin: "Pin",
+    actionDelete: "Delete",
+    subtitles: {
+      home: "Come Grab a Bite",
+      choose: "Easy Choice",
+      recommend: "What's Nearby",
+      energy: "Saved Choice",
+      log: "My History"
+    }
+  }
+};
+
+// 簡單的語言偵測 Hook
+function useLanguage() {
+  // 如果是中文 (zh-TW, zh-CN) 就用 zh，否則全部用 en
+  const langCode = navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
+  return TRANSLATIONS[langCode];
+}
+
 // --- Icon 元件 (底層邏輯修復：強制分離顏色與粗細) ---
 const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (
   <svg 
@@ -28,7 +143,7 @@ const LucideRotateCcw = (props: any) => (
   </Icon>
 );
 
-// [回顧/歷史] 圖標
+// [回顧/歷史] 圖標 (修正：使用 RotateCcw 基底 + 時鐘指針)
 const LucideHistory = (props: any) => (
   <Icon {...props}>
     <polyline points="1 4 1 10 7 10" />
@@ -48,7 +163,6 @@ const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count";
 const BACKEND_API_URL = "/api/places"; 
 const BACKEND_GEMINI_URL = "/api/gemini";
 
-// 標籤定義更新
 type Temp = "light" | "rich"; 
 type Hunger = "full" | "snack"; 
 type Speed = "fast" | "sit";
@@ -132,7 +246,7 @@ function fmtDate(iso: string) {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function groupLogsByDate(logs: LogEntry[]) {
+function groupLogsByDate(logs: LogEntry[], t: any) {
   const groups: { title: string; type: 'pinned' | 'date'; items: LogEntry[] }[] = [];
   const pinned: LogEntry[] = [];
   const today: LogEntry[] = [];
@@ -154,10 +268,10 @@ function groupLogsByDate(logs: LogEntry[]) {
     else older.push(log);
   });
 
-  if (pinned.length > 0) groups.push({ title: "釘選置頂", type: 'pinned', items: pinned });
-  if (today.length > 0) groups.push({ title: "今天", type: 'date', items: today });
-  if (yesterday.length > 0) groups.push({ title: "昨天", type: 'date', items: yesterday });
-  if (older.length > 0) groups.push({ title: "更早之前", type: 'date', items: older });
+  if (pinned.length > 0) groups.push({ title: t.pinned, type: 'pinned', items: pinned });
+  if (today.length > 0) groups.push({ title: t.today, type: 'date', items: today });
+  if (yesterday.length > 0) groups.push({ title: t.yesterday, type: 'date', items: yesterday });
+  if (older.length > 0) groups.push({ title: t.older, type: 'date', items: older });
 
   return groups;
 }
@@ -177,17 +291,17 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
   return R * c; 
 }
 
-function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }) {
+// 修正：標籤生成也支援多語言
+function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }, t: any) {
   const { temp, hunger, budget } = args;
-  const t: string[] = [];
+  const tags: string[] = [];
     
-  if (temp) t.push(temp === "light" ? "清淡點" : "重口味");
-  if (hunger) t.push(hunger === "full" ? "吃飽" : "解饞");
-   
-  if (budget === "cheap") t.push("隨便吃吃");
-  if (budget === "expensive") t.push("犒賞自己");
+  if (temp) tags.push(temp === "light" ? t.light : t.rich);
+  if (hunger) tags.push(hunger === "full" ? t.full : t.snack);
+  if (budget === "cheap") tags.push(t.cheap);
+  if (budget === "expensive") tags.push(t.expensive);
 
-  return { tags: t };
+  return { tags };
 }
 
 function getGoogleMapsUrl(query: string, placeId?: string) {
@@ -207,51 +321,15 @@ function navigateToMap(url: string) {
   }
 }
 
+// ★★★★ 核心修正：組裝人性化的語意搜尋字串 (國際化通用版) ★★★★
+// 修正 1：改用英文關鍵字 (English Keywords)，確保全球各地 (東京、巴黎、紐約) 都能搜到結果。
+// 修正 2：保留「絕對條件疊加」，確保三個維度的需求都被滿足。
 function buildMapsQuery(tags: string[]) {
-  const hour = new Date().getHours();
-  const isMorning = hour >= 5 && hour < 11;
-  const isAfternoon = hour >= 14 && hour < 17;
-  const isLateNight = hour >= 21 || hour < 5;
-
-  const isLight = tags.includes("清淡點");
-  const isRich = tags.includes("重口味");
-  const hasFull = tags.includes("吃飽");
-  const hasSnack = tags.includes("解饞");
-  const isCheap = tags.includes("隨便吃吃");
-  const isExpensive = tags.includes("犒賞自己");
-
-  let categories: string[] = [];
-
-  if (hasFull) {
-      if (isMorning) {
-          categories.push("早午餐", "飯糰", "鹹粥", "蛋餅", "早餐店");
-      } else {
-          let baseFoods = ["便當", "丼飯", "拉麵", "牛肉麵", "火鍋", "咖哩", "鐵板燒", "義大利麵", "合菜", "簡餐"];
-          if (isLight) baseFoods.push("清粥小菜", "涼麵", "壽司", "潤餅", "蒸餃", "水煮餐", "健康餐");
-          if (isRich) baseFoods.push("麻辣鍋", "熱炒", "燒肉", "漢堡", "炸雞", "咖哩");
-          categories = baseFoods;
-
-          if (isExpensive) categories.push("麻辣鍋", "燒肉", "牛排", "川菜", "異國料理", "私廚");
-          if (isCheap) categories.push("自助餐", "炒飯", "陽春麵", "水餃");
-      }
-  } else if (hasSnack) {
-      let baseSnacks = ["鹹酥雞", "滷味", "車輪餅", "雞蛋糕", "章魚燒", "蔥油餅", "地瓜球", "炸雞", "串燒"];
-      if (isLight) baseSnacks.push("豆花", "剉冰", "手搖飲", "甜點", "蛋糕", "水果盤", "沙拉");
-      if (isRich) baseSnacks.push("碳烤", "東山鴨頭", "臭豆腐", "排骨酥");
-      categories = baseSnacks;
-
-      if (isAfternoon) categories.push("下午茶", "鬆餅", "咖啡廳", "麵包店");
-      if (isLateNight) categories.push("宵夜", "永和豆漿", "鹽水雞", "串燒");
-  } else {
-      categories = ["美食", "小吃", "餐廳"];
-  }
-
-  if (isExpensive && categories.length < 5) {
-      categories.push("居酒屋", "餐酒館", "日本料理");
-  }
-
-  const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
-  return selectedCategory;
+  // 注意：這裡 tags 可能會因為 computeTags 的 i18n 變成中文或英文
+  // 但我們這裡需要的是原始的「邏輯狀態」來組裝英文 Query
+  // 所以我們不依賴 tags 陣列的字面值，而是在 App component 裡根據 state 來組裝
+  // 這裡僅保留函式簽章，實際邏輯移到 App 內部直接用 state
+  return ""; 
 }
 
 function useLocalStorageLog() {
@@ -287,7 +365,7 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTeaseComplete }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void; tease?: boolean; onTeaseComplete?: () => void }) {
+function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTeaseComplete, t }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void; tease?: boolean; onTeaseComplete?: () => void, t: any }) {
   const x = useMotionValue(0);
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
   const [isDragging, setIsDragging] = useState(false);
@@ -315,11 +393,11 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
       >
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
            <LucidePin size={20} color="currentColor" strokeWidth={2} />
-           <span className="font-bold text-sm">釘選</span>
+           <span className="font-bold text-sm">{t.actionPin}</span>
         </div>
 
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
-           <span className="font-bold text-sm">刪除</span>
+           <span className="font-bold text-sm">{t.actionDelete}</span>
            <LucideTrash2 size={20} color="currentColor" strokeWidth={2} />
         </div>
       </motion.div>
@@ -334,12 +412,12 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
         onDragEnd={(_, { offset }) => {
           setIsDragging(false);
           if (offset.x < -60) {
-            if (window.confirm("確定要刪除這筆紀錄嗎？")) {
+            if (window.confirm(t.confirmDelete)) {
                 onDelete();
             }
           } else if (offset.x > 60) {
             if (item.isPinned) {
-                 if (window.confirm("確定要取消這筆紀錄的釘選嗎？")) {
+                 if (window.confirm(t.confirmPin)) {
                      onPin();
                  }
             } else {
@@ -573,12 +651,12 @@ function ProgressDots({ step, total, onStepClick }: { step: number; total: numbe
 }
 
 export default function App() {
+  const t = useLanguage();
   const { log, setLog } = useLocalStorageLog();
   const [screen, setScreen] = useState<Screen>("home");
   const [chooseStep, setChooseStep] = useState(0);
   const totalChooseSteps = 3;
 
-  // ★ 新邏輯：清淡(light) / 重口(rich)
   const [temp, setTemp] = useState<Temp | null>(null);
   const [hunger, setHunger] = useState<Hunger | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
@@ -622,15 +700,43 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  // 新增狀態：記錄目前搜尋半徑，從 1000 (1km) 開始
   const [searchRadius, setSearchRadius] = useState(1000); 
     
-  const derived = useMemo(() => computeTags({ temp, hunger, budget }), [temp, hunger, budget]);
+  const derived = useMemo(() => computeTags({ temp, hunger, budget }, t), [temp, hunger, budget, t]);
   const tags = derived.tags;
   const style: Style = budget === "expensive" ? "rich" : "light";
-  const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
+  
+  // ★ 組裝搜尋字串：這裡使用 state 中的原始值 (light/rich 等) 來對應英文關鍵字，而不是用翻譯後的 tags
+  // 這樣無論 UI 顯示哪種語言，搜尋引擎收到的都是標準的英文指令 (如: "cheap healthy restaurant")
+  const mapsQuery = useMemo(() => {
+    let queryParts = [];
+    
+    // 1. Budget (Adjective)
+    if (budget === "cheap") queryParts.push("cheap", "budget", "affordable");
+    if (budget === "expensive") queryParts.push("fancy", "fine dining", "upscale");
+    
+    // 2. Taste (Adjective)
+    if (temp === "light") queryParts.push("light", "healthy", "fresh");
+    if (temp === "rich") queryParts.push("rich flavor", "savory", "heavy");
+    
+    // 3. Type (Noun)
+    if (hunger === "full") queryParts.push("restaurant", "meal");
+    if (hunger === "snack") queryParts.push("snacks", "street food", "finger food");
+    
+    let finalParts = [];
+    if (budget === "cheap") finalParts.push("cheap");
+    if (budget === "expensive") finalParts.push("fancy");
+    if (temp === "light") finalParts.push("healthy");
+    if (temp === "rich") finalParts.push("savory");
+    if (hunger === "full") finalParts.push("restaurant");
+    if (hunger === "snack") finalParts.push("snacks");
+    
+    if (!hunger) finalParts.push("food");
+    
+    return finalParts.join(" ");
+  }, [temp, hunger, budget]);
 
-  const groupedLogs = useMemo(() => groupLogsByDate(log), [log]);
+  const groupedLogs = useMemo(() => groupLogsByDate(log, t), [log, t]);
 
   const VISIBLE_COUNT = 3;
 
@@ -643,16 +749,14 @@ export default function App() {
     }
   }, []);
 
-  // ★★★ 核心：遞迴同心圓搜尋 & AI 過濾 ★★★
   const searchPlacesWithRipple = async (radius: number, retryCount = 0) => {
     if (!userLocation || !BACKEND_API_URL || !BACKEND_GEMINI_URL) return;
     
     setIsRealLoading(true);
     setApiError(null);
-    setSearchRadius(radius); // 更新 UI 顯示目前的範圍
+    setSearchRadius(radius);
 
     try {
-      // 1. Google 搜尋 (Raw Data)
       const placesRes = await fetch(BACKEND_API_URL, { 
         method: "POST", 
         headers: { "Content-Type": "application/json" }, 
@@ -668,21 +772,18 @@ export default function App() {
       if (!placesRes.ok) throw new Error(await placesRes.text());
       const rawPlaces: Place[] = await placesRes.json();
 
-      // 如果 Google 什麼都沒抓到
       if (rawPlaces.length === 0) {
          if (radius < 5000) {
              console.log(`[同心圓] ${radius}m 無結果，擴大至 ${radius * 2}m...`);
              searchPlacesWithRipple(radius * 2, retryCount + 1);
              return; 
          } else {
-             // 5km 還是沒抓到 raw data，顯示錯誤
              setRealPlaces([]);
-             setApiError("附近找不到符合條件的店"); // ★ 精確符合文案
+             setApiError(t.notFound);
              return;
          }
       }
 
-      // 2. AI 過濾 (The Gatekeeper)
       if (rawPlaces.length > 0) {
         const filterRes = await fetch(BACKEND_GEMINI_URL, {
           method: "POST",
@@ -690,7 +791,7 @@ export default function App() {
           body: JSON.stringify({ 
             mode: "filter", 
             candidates: rawPlaces,
-            userTags: tags,
+            userTags: tags, // 傳送當前語言的標籤 (AI 懂多國語言，且有 Prompt 輔助)
             language: navigator.language 
           }) 
         });
@@ -703,33 +804,28 @@ export default function App() {
            finalIndices = parsed.ids || [];
         } catch (e) {
            console.error("AI 解析失敗", e);
-           // 解析失敗時不顯示任何店，視同過濾失敗，避免顯示錯誤結果
            finalIndices = [];
         }
 
         const aiSelectedPlaces = rawPlaces.filter((_, index) => finalIndices.includes(index));
         
-        // ★ 關鍵判斷：如果 AI 過濾後變成 0 家，擴大範圍！
         if (aiSelectedPlaces.length === 0) {
             if (radius < 5000) {
                 console.log(`[AI淘汰] ${radius}m 內無合格店家，擴大至 ${radius * 2}m...`);
                 searchPlacesWithRipple(radius * 2, retryCount + 1);
                 return;
             } else {
-                // 5km 內 AI 還是覺得都不行，顯示錯誤 (不再補位！)
                 setRealPlaces([]); 
-                setApiError("附近找不到符合條件的店"); // ★ 精確符合文案
+                setApiError(t.notFound);
                 return;
             }
         }
 
-        // 有找到合格的店 -> 顯示結果
         const placesWithDist = aiSelectedPlaces.map((p) => {
             const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
             return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
         });
         
-        // ★ 排序：由近到遠
         placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
         
         setRealPlaces(placesWithDist);
@@ -739,21 +835,11 @@ export default function App() {
     } catch (err: any) {
       setApiError(`API Error: ${err.message}`);
     } finally {
-      // 只有在不是遞迴呼叫 (即找到了結果，或者真的出錯了) 時才關閉 loading
-      // 我們可以檢查：如果現在這輪結束了，而且沒有觸發下一輪，就關 loading
-      // 簡單判斷法：如果設定了 error 或者 realPlaces 有東西，就是結束了
-      // 但因為 React state update 是 async，這裡用 radius 判斷比較準
+  
     }
-    // 讓 UI 保持 Loading 直到有結果或報錯
-    // 這裡我們不主動 setFalse，而是依賴上述邏輯分支中的 return
-    // 但為了保險，我們在「確認結束」的地方 setFalse (上面的 return 前)
-    // 修正寫法：把 setIsRealLoading(false) 移到每個 return 之前
-    // 為了代碼整潔，我們在 useEffect 中監聽 realPlaces 或 apiError 的變化來關閉 loading 比較安全？
-    // 不，直接在上面的邏輯中處理最直觀。
-    // 由於 searchPlacesWithRipple 是 async，我們可以在每個「終點」加。
+  
   };
 
-  // 監聽狀態變化來關閉 Loading (更安全的做法)
   useEffect(() => {
     if (realPlaces.length > 0 || apiError) {
         setIsRealLoading(false);
@@ -803,7 +889,6 @@ export default function App() {
   function nextChoose() { if (chooseStep < totalChooseSteps - 1) setChooseStep((s) => s + 1); else setScreen("recommend"); }
 
   function randomizeAll() {
-    // ★ 隨機功能也配合新標籤
     setTemp(Math.random() > 0.5 ? "light" : "rich");
     setHunger(Math.random() > 0.5 ? "full" : "snack");
     const rndBudget = Math.random() > 0.5 ? "cheap" : "expensive";
@@ -891,16 +976,13 @@ export default function App() {
     setIsAiLoading(true);
 
     let targetPlace: Place | null = null;
-     
-    const availableCandidates = realPlaces.filter(p => !suggestedPlaceIds.has(p.id));
-    const hiddenCandidates = availableCandidates.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
+
+    const hiddenCandidates = realPlaces.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
 
     if (hiddenCandidates.length > 0) {
         targetPlace = hiddenCandidates[Math.floor(Math.random() * hiddenCandidates.length)];
-    } else if (availableCandidates.length > 0) {
-        targetPlace = availableCandidates[Math.floor(Math.random() * availableCandidates.length)];
     } else {
-        targetPlace = realPlaces[Math.floor(Math.random() * realPlaces.length)];
+        targetPlace = null;
     }
 
     if (targetPlace) {
@@ -915,13 +997,14 @@ export default function App() {
     if (targetPlace) {
         prompt = `使用者想吃：${tags.join(', ')}。
         推薦一家店叫「${targetPlace.name}」。
-        請用繁體中文，給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
+        請給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
         同時請安撫使用者，這家店雖然可能不是完美的 100分，但絕對值得一試。
         格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
     } else {
         prompt = `使用者想吃：${tags.join(', ')}。
-        請推薦一道具體且適合的台灣常見餐點。
-        回傳 JSON 格式：{ "dish": "餐點名稱", "reason": "一句話推薦理由(30字內)" }`;
+        附近已經沒有其他符合條件的推薦店家的了。
+        請給出一個「通用的餐點建議」（例如：不如去便利商店買個關東煮？或是改吃水果？），語氣幽默一點。
+        回傳 JSON 格式：{ "dish": "通用建議", "reason": "一句話幽默建議(30字內)" }`;
     }
 
     try {
@@ -961,11 +1044,11 @@ export default function App() {
   }
 
   function subtleTitle() {
-    if (screen === "home") return "Come Grab a Bite";
-    if (screen === "choose") return "做個輕鬆的選擇";
-    if (screen === "recommend") return "附近可以吃什麼";
-    if (screen === "energy") return "留下這次的食力";
-    return "我的食力";
+    if (screen === "home") return t.subtitles.home;
+    if (screen === "choose") return t.subtitles.choose;
+    if (screen === "recommend") return t.subtitles.recommend;
+    if (screen === "energy") return t.subtitles.energy;
+    return t.subtitles.log;
   }
 
   const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" } as const;
@@ -987,8 +1070,8 @@ export default function App() {
             <AnimatePresence mode="wait">
               {screen === "home" && (
                 <motion.div key="home" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
-                  <div className="text-2xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>來覓食</div>
-                  <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center", fontWeight: 400 }}>佛系覓食，點幾下就知道要吃什麼</div>
+                  <div className="text-2xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>{t.appTitle}</div>
+                  <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center", fontWeight: 400 }}>{t.appSubtitle}</div>
                   <div className="mt-8 flex flex-col items-center justify-center">
                     <EnergyCore mode={log.length > 0 && log[0] ? (log[0].sig?.mode ?? "chaos") : "chaos"} temp={log.length > 0 && log[0] ? log[0].sig?.temp : null} richness={log.length > 0 && log[0] ? (log[0].sig?.richness ?? 0.5) : 0.5} size={220} />
                   </div>
@@ -996,15 +1079,14 @@ export default function App() {
                     <div className="mt-4 flex justify-center w-full px-8">
                       <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleReEat(log[0])} className="group flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors hover:bg-black/5 w-full max-w-[320px]" style={{ color: warm.sub, maxWidth: 320 }}>
                         <div className="flex items-center justify-center gap-2 text-xs opacity-60 w-full" style={{ letterSpacing: "0.05em" }}>
-                            {/* 手動調整 strokeWidth 為 1.5，避免小圖標糊成一團 */}
                             <LucideRotateCcw size={12} color="currentColor" strokeWidth={1.5} />
-                            <span>上次吃</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span>
+                            <span>{t.lastEat}</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span>
                         </div>
                         <div className="text-base leading-snug font-medium text-center w-full break-words opacity-80" style={{ color: warm.text }}>{(log[0].choiceText || "").replace("搜尋：", "")}</div>
                       </motion.button>
                     </div>
                   )}
-                  <div className="mt-12"><PrimaryButton onClick={startDecision}>開始覓食</PrimaryButton></div>
+                  <div className="mt-12"><PrimaryButton onClick={startDecision}>{t.startBtn}</PrimaryButton></div>
                   <div className="mt-6">
                     <button 
                         onClick={handleRandomClick}
@@ -1013,13 +1095,12 @@ export default function App() {
                     >
                       {isRandomizing ? (
                           <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                              {/* 修正：字重 600，間距 0.05em，與沒想法一致 */}
-                              <span className="animate-pulse text-base" style={{color: warm.orange, fontWeight: 600, letterSpacing: "0.05em"}}>隨緣覓食中...</span>
+                              <span className="animate-pulse text-base" style={{color: warm.orange, fontWeight: 600, letterSpacing: "0.05em"}}>{t.randoming}</span>
                           </div>
                       ) : (
                           <>
-                              <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>沒想法</div>
-                              <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
+                              <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>{t.randomBtn}</div>
+                              <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
                           </>
                       )}
                     </button>
@@ -1029,29 +1110,28 @@ export default function App() {
 
               {screen === "choose" && (
                 <motion.div key="choose" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
-                  <div className="text-xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>做個輕鬆的選擇</div>
+                  <div className="text-xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>{t.stepTitle}</div>
                   <ProgressDots step={chooseStep} total={totalChooseSteps} onStepClick={setChooseStep} />
                   <div className="mt-8 space-y-4">
                     {chooseStep === 0 && (
                       <>
-                        {/* 修改：按鈕文案改為「清淡點」与「重口味」 */}
-                        <PillButton active={temp === "light"} onClick={() => setTemp("light")}>清淡點</PillButton>
-                        <PillButton active={temp === "rich"} onClick={() => setTemp("rich")}>重口味</PillButton>
-                        <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!temp}>下一步</PrimaryButton></div>
+                        <PillButton active={temp === "light"} onClick={() => setTemp("light")}>{t.light}</PillButton>
+                        <PillButton active={temp === "rich"} onClick={() => setTemp("rich")}>{t.rich}</PillButton>
+                        <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!temp}>{t.next}</PrimaryButton></div>
                       </>
                     )}
                     {chooseStep === 1 && (
                       <>
-                        <PillButton active={hunger === "full"} onClick={() => setHunger("full")}>吃飽</PillButton>
-                        <PillButton active={hunger === "snack"} onClick={() => setHunger("snack")}>解饞</PillButton>
-                        <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!hunger}>下一步</PrimaryButton></div>
+                        <PillButton active={hunger === "full"} onClick={() => setHunger("full")}>{t.full}</PillButton>
+                        <PillButton active={hunger === "snack"} onClick={() => setHunger("snack")}>{t.snack}</PillButton>
+                        <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!hunger}>{t.next}</PrimaryButton></div>
                       </>
                     )}
                     {chooseStep === 2 && (
                       <>
-                        <PillButton active={budget === "cheap"} onClick={() => handleBudgetSelect("cheap")}>隨便吃吃</PillButton>
-                        <PillButton active={budget === "expensive"} onClick={() => handleBudgetSelect("expensive")}>犒賞自己</PillButton>
-                        <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!budget}>完成</PrimaryButton></div>
+                        <PillButton active={budget === "cheap"} onClick={() => handleBudgetSelect("cheap")}>{t.cheap}</PillButton>
+                        <PillButton active={budget === "expensive"} onClick={() => handleBudgetSelect("expensive")}>{t.expensive}</PillButton>
+                        <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!budget}>{t.finish}</PrimaryButton></div>
                       </>
                     )}
                   </div>
@@ -1060,7 +1140,7 @@ export default function App() {
 
               {screen === "recommend" && (
                 <motion.div key="recommend" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
-                  <div className="text-xl mt-4 text-center font-bold" style={{color: warm.text}}>附近可以吃什麼</div>
+                  <div className="text-xl mt-4 text-center font-bold" style={{color: warm.text}}>{t.recommendTitle}</div>
                   <div className="flex flex-col items-center justify-center mb-6">
                     <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} />
                     <div className="mt-4 flex flex-wrap gap-2 justify-center">{tags.map((t) => (<Tag key={t}>{t}</Tag>))}</div>
@@ -1069,8 +1149,8 @@ export default function App() {
                   <div className="mt-4 space-y-4">
                     {isRealLoading && (
                       <div className="py-8 text-center text-gray-400 animate-pulse text-sm">
-                          正在搜尋附近的美味...<br/>
-                          {searchRadius > 1000 && <span className="text-xs text-orange-400">(擴大搜尋範圍中: {searchRadius}m)</span>}
+                          {t.searching}<br/>
+                          {searchRadius > 1000 && <span className="text-xs text-orange-400">({t.expanding}: {searchRadius}m)</span>}
                       </div>
                     )}
                      
@@ -1089,7 +1169,7 @@ export default function App() {
                                 <div className="flex items-start justify-between gap-3 w-full">
                                     <div className="flex-1 min-w-0">
                                         <div className="text-base break-words" style={{ fontWeight: 700, color: warm.text, letterSpacing: "0.02em" }}>{p.name}</div>
-                                        <div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>{p.distance} ・ <span style={{color: warm.orange}}>{p.rating ? `★${p.rating}` : '無評分'}</span></div>
+                                        <div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>{p.distance} ・ <span style={{color: warm.orange}}>{p.rating ? `★${p.rating}` : ' - '}</span></div>
                                     </div>
                                     <div className="h-9 w-9 flex-shrink-0 rounded-full flex items-center justify-center transition-colors group-hover:bg-orange-100" style={{ background: "rgba(255,138,61,0.1)", border: "1px solid rgba(255,138,61,0.2)" }}>
                                         <span style={{ fontWeight: 800, color: warm.orange, fontSize: 12 }} aria-hidden>→</span>
@@ -1102,32 +1182,32 @@ export default function App() {
                     <div className="pt-2 pb-2">
                       <motion.button whileTap={{ scale: 0.98 }} onClick={callGeminiChef} disabled={isAiLoading} className="w-full rounded-2xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)", border: "1px dashed rgba(255,159,94,0.4)", color: warm.text }}>
                         {isAiLoading ? (
-                          <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl">✨</span><span className="font-bold text-sm">AI 大廚正在思考...</span></div>
+                          <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl">✨</span><span className="font-bold text-sm">{t.aiThinking}</span></div>
                         ) : aiSuggestion ? (
-                            <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>↻</span> 還是不滿意？再試一次</div>
+                            <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>↻</span> {t.aiRetry}</div>
                         ) : (
                           <>
-                            <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>✨</span> 都不滿意？讓 AI 大廚幫你挑</div>
+                            <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>✨</span> {t.aiHelp}</div>
                           </>
                         )}
                       </motion.button>
                     </div>
                     {aiSuggestion && (
                       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl p-5 mb-4 text-left" style={{ background: "rgba(255,255,255,0.9)", border: `1px solid ${warm.orange}`, boxShadow: warm.shadowActive }}>
-                        <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider">✨ AI 專屬推薦</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
+                        <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider">✨ {t.aiTag}</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
                         <div className="text-lg font-bold mb-1" style={{color: warm.text}}>{aiSuggestion.dish}</div>
                         {aiSuggestion.targetPlace && (
                             <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>
-                                {aiSuggestion.targetPlace.distance} ・ <span style={{color: warm.orange}}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : '無評分'}</span>
+                                {aiSuggestion.targetPlace.distance} ・ <span style={{color: warm.orange}}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : ' - '}</span>
                             </div>
                         )}
                         <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{color: "#6B5D52"}}>{aiSuggestion.reason}</div>
-                        <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>出發去吃！ →</PrimaryButton>
+                        <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
                       </motion.div>
                     )}
                     <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
-                      <div className="text-sm opacity-60 font-medium">還是沒看到想吃的？</div>
-                      <div className="text-sm opacity-90"><span className="underline font-bold" style={{textUnderlineOffset: 3}}>在地圖搜尋「{mapsQuery}」</span></div>
+                      <div className="text-sm opacity-60 font-medium">{t.manualSearch}</div>
+                      <div className="text-sm opacity-90"><span className="underline font-bold" style={{textUnderlineOffset: 3}}>{t.manualSearchHint}</span></div>
                     </motion.button>
                   </div>
                 </motion.div>
@@ -1135,22 +1215,22 @@ export default function App() {
 
               {screen === "energy" && (
                 <motion.div key="energy" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
-                  <div className="text-xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>留下這次的食力</div>
-                  <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center" }}>剛剛的選擇已自動紀錄。<br/>祝你用餐愉快！</div>
+                  <div className="text-xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>{t.saveTitle}</div>
+                  <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center", whiteSpace: "pre-line" }}>{t.saveDesc}</div>
                   <div className="mt-8 flex items-center justify-center"><EnergyCore mode="satisfied" temp={temp} richness={richness} size={240} /></div>
-                  <div className="mt-8 space-y-5"><PrimaryButton onClick={() => setScreen("log")}>看我的食力</PrimaryButton><PrimaryButton subtle onClick={goHome}>回到首頁</PrimaryButton></div>
+                  <div className="mt-8 space-y-5"><PrimaryButton onClick={() => setScreen("log")}>{t.viewLog}</PrimaryButton><PrimaryButton subtle onClick={goHome}>{t.backHome}</PrimaryButton></div>
                 </motion.div>
               )}
 
               {screen === "log" && (
                 <motion.div key="log" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-0 h-[600px] flex flex-col" style={{ height: 600 }}>
                   <div className="px-6 pt-8 pb-2 flex items-end justify-between gap-3 shrink-0">
-                    <div><div className="text-xl" style={{ fontWeight: 700, letterSpacing: "0.02em" }}>我的食力</div><div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>回顧每一次的美味選擇</div></div>
+                    <div><div className="text-xl" style={{ fontWeight: 700, letterSpacing: "0.02em" }}>{t.logTitle}</div><div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>{t.logSubtitle}</div></div>
                     <button 
                         className="rounded-xl px-3 py-2 text-xs font-medium transition-opacity disabled:opacity-50" 
                         style={{ border: warm.borderAction, background: "rgba(255,255,255,0.5)", color: warm.orange }} 
                         onClick={() => {
-                            if (window.confirm("確定要清空所有紀錄嗎？此動作無法復原。")) {
+                            if (window.confirm(t.confirmClear)) {
                                 setLog([]);
                             }
                         }} 
@@ -1164,7 +1244,7 @@ export default function App() {
                     <div className="pt-4 pb-6 space-y-3">
                       {groupedLogs.length === 0 ? (
                         <div className="rounded-2xl p-6 mt-4 text-center" style={{ border: "1px dashed rgba(255,138,61,0.3)", background: "rgba(255,211,106,0.08)" }}>
-                          <div className="text-base font-bold" style={{color: warm.text}}>還沒有食力</div><div className="mt-2 text-sm text-gray-500">這裡會記錄你所有的覓食歷程</div>
+                          <div className="text-base font-bold" style={{color: warm.text}}>{t.emptyLog}</div><div className="mt-2 text-sm text-gray-500">{t.emptyLogDesc}</div>
                         </div>
                       ) : (
                         groupedLogs.map((group) => (
@@ -1188,7 +1268,8 @@ export default function App() {
                                     onPin={() => togglePin(item.id)}
                                     onDelete={() => deleteLog(item.id)}
                                     tease={isFirstItem && swipeTeaseCount < MAX_TEASE_COUNT}
-                                    onTeaseComplete={incrementTeaseCount} 
+                                    onTeaseComplete={incrementTeaseCount}
+                                    t={t} 
                                   />
                                 );
                             })}
