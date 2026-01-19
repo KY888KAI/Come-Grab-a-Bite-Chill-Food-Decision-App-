@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
-// --- 核心修正：Icon 元件 ---
 const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
@@ -20,7 +19,6 @@ const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ..
   </svg>
 );
 
-// [上次吃] 使用的圖標 (你提供的完美版本)
 const LucideRotateCcw = (props: any) => (
   <Icon {...props}>
     <polyline points="1 4 1 10 7 10" />
@@ -28,14 +26,10 @@ const LucideRotateCcw = (props: any) => (
   </Icon>
 );
 
-// [回顧/歷史] 專用圖標 (學習修正版：使用 RotateCcw 基底 + 時鐘指針)
 const LucideHistory = (props: any) => (
   <Icon {...props}>
-    {/* 基底：乾淨的逆時針圓弧 */}
     <polyline points="1 4 1 10 7 10" />
     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-    
-    {/* 加上：時鐘指針 (代表時間/歷史) */}
     <polyline points="12 6 12 12 16 14" />
   </Icon>
 );
@@ -51,7 +45,6 @@ const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count";
 const BACKEND_API_URL = "/api/places"; 
 const BACKEND_GEMINI_URL = "/api/gemini";
 
-// ★ 邏輯重構：改為 "light/rich" (清淡/重口)
 type Temp = "light" | "rich"; 
 type Hunger = "full" | "snack"; 
 type Speed = "fast" | "sit";
@@ -68,7 +61,7 @@ type Place = {
   hunger?: Hunger;
   speed?: Speed;
   price?: "budget" | "mid";
-  priceLevel?: string; // 新增：後端回傳的原始價格等級
+  priceLevel?: string;
   queryKeyword?: string; 
   distance: string; 
   distanceVal?: number;
@@ -180,12 +173,11 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
   return R * c; 
 }
 
-// ★ 修改 2：更新標籤計算邏輯，使用新的文案
 function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }) {
   const { temp, hunger, budget } = args;
   const t: string[] = [];
     
-  if (temp) t.push(temp === "light" ? "清淡點" : "重口味"); // 3字 vs 3字
+  if (temp) t.push(temp === "light" ? "清淡點" : "重口味");
   if (hunger) t.push(hunger === "full" ? "吃飽" : "解饞");
    
   if (budget === "cheap") t.push("隨便吃吃");
@@ -211,7 +203,6 @@ function navigateToMap(url: string) {
   }
 }
 
-// ★ 修改 3：更新搜尋關鍵字邏輯，配合新的 "清淡/重口"
 function buildMapsQuery(tags: string[]) {
   const hour = new Date().getHours();
   const isMorning = hour >= 5 && hour < 11;
@@ -222,65 +213,37 @@ function buildMapsQuery(tags: string[]) {
   const isRich = tags.includes("重口味");
   const hasFull = tags.includes("吃飽");
   const hasSnack = tags.includes("解饞");
-   
   const isCheap = tags.includes("隨便吃吃");
   const isExpensive = tags.includes("犒賞自己");
 
-  const prefixes = ["人氣", "在地", "必吃", "評價高", "隱藏版", "老字號", "排隊", "道地", "TOP"];
-  if (isCheap) prefixes.push("平價", "銅板美食", "高CP值", "便宜");
-  if (isExpensive) prefixes.push("精緻", "高級", "氣氛好", "聚餐");
-
-  const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-
   let categories: string[] = [];
 
-  // 這裡我們進行「廣泛搜尋」，把過濾交給後端 AI，所以關鍵字要稍微涵蓋多一點
   if (hasFull) {
       if (isMorning) {
           categories.push("早午餐", "飯糰", "鹹粥", "蛋餅", "早餐店");
       } else {
-          // 通用主食
           let baseFoods = ["便當", "丼飯", "拉麵", "牛肉麵", "火鍋", "咖哩", "鐵板燒", "義大利麵", "合菜", "簡餐"];
-          
-          if (isLight) {
-             // 如果選清淡，加入特定清淡類別，並在後端 AI 過濾時會更嚴格
-             baseFoods.push("清粥小菜", "涼麵", "壽司", "潤餅", "蒸餃", "水煮餐", "健康餐");
-          }
-          if (isRich) {
-             // 如果選重口，加入特定重口類別
-             baseFoods.push("麻辣鍋", "熱炒", "燒肉", "漢堡", "炸雞", "咖哩");
-          }
-
+          if (isLight) baseFoods.push("清粥小菜", "涼麵", "壽司", "潤餅", "蒸餃", "水煮餐", "健康餐");
+          if (isRich) baseFoods.push("麻辣鍋", "熱炒", "燒肉", "漢堡", "炸雞", "咖哩");
           categories = baseFoods;
-
           if (isExpensive) categories.push("麻辣鍋", "燒肉", "牛排", "川菜", "異國料理", "私廚");
           if (isCheap) categories.push("自助餐", "炒飯", "陽春麵", "水餃");
       }
   } else if (hasSnack) {
-      // 點心類原本就比較偏重口，但還是可以區分
       let baseSnacks = ["鹹酥雞", "滷味", "車輪餅", "雞蛋糕", "章魚燒", "蔥油餅", "地瓜球", "炸雞", "串燒"];
-      
-      if (isLight) {
-          baseSnacks.push("豆花", "剉冰", "手搖飲", "甜點", "蛋糕", "水果盤", "沙拉");
-      }
-      if (isRich) {
-          baseSnacks.push("碳烤", "東山鴨頭", "臭豆腐", "排骨酥");
-      }
-      
+      if (isLight) baseSnacks.push("豆花", "剉冰", "手搖飲", "甜點", "蛋糕", "水果盤", "沙拉");
+      if (isRich) baseSnacks.push("碳烤", "東山鴨頭", "臭豆腐", "排骨酥");
       categories = baseSnacks;
-
       if (isAfternoon) categories.push("下午茶", "鬆餅", "咖啡廳", "麵包店");
       if (isLateNight) categories.push("宵夜", "永和豆漿", "鹽水雞", "串燒");
   } else {
       categories = ["美食", "小吃", "餐廳"];
   }
 
-  if (isExpensive && categories.length < 5) {
-      categories.push("居酒屋", "餐酒館", "日本料理");
-  }
+  if (isExpensive && categories.length < 5) categories.push("居酒屋", "餐酒館", "日本料理");
 
   const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
-  return Math.random() > 0.3 ? `${randomPrefix} ${selectedCategory}` : selectedCategory;
+  return selectedCategory;
 }
 
 function useLocalStorageLog() {
@@ -493,13 +456,12 @@ function TopBar({
   
   const btnClassName = "flex items-center justify-center w-10 h-10 rounded-xl backdrop-blur-md shadow-sm active:scale-95 transition-all";
   
-  // ★ 按鈕樣式優化，邊框和圖標改為品牌橘色
   const btnCustomStyle = {
       background: "rgba(255, 255, 255, 0.4)",
-      borderColor: "rgba(255, 138, 61, 0.35)", // 加深一點的橘色邊框
+      borderColor: "rgba(255, 138, 61, 0.35)", 
       borderWidth: "1px",
       borderStyle: "solid",
-      color: "#FF9F5E" // 圖標改為橘色
+      color: "#FF9F5E" 
   };
 
   const renderBtn = (onClick: () => void, icon: React.ReactNode) => (
@@ -546,9 +508,8 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   const jitter = mode === "chaos" ? 6 : 0;
     
   const palette = useMemo(() => {
-    // 配合 "light/rich" 更新視覺
-    if (temp === "rich") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," }; // 重口味用紅色系
-    if (temp === "light") return { a: "rgba(255, 160, 130, ", b: "rgba(240, 248, 255, ", ring: "rgba(176, 224, 230, 0.5)", glowColor: "rgba(255, 180, 160," }; // 清淡用淺色系
+    if (temp === "rich") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," }; 
+    if (temp === "light") return { a: "rgba(255, 160, 130, ", b: "rgba(240, 248, 255, ", ring: "rgba(176, 224, 230, 0.5)", glowColor: "rgba(255, 180, 160," }; 
     return { a: "rgba(255, 138, 61, ", b: "rgba(255, 211, 106, ", ring: "rgba(255, 138, 61, 0.28)", glowColor: "rgba(255, 138, 61," };
   }, [temp]);
 
@@ -609,7 +570,6 @@ export default function App() {
   const [chooseStep, setChooseStep] = useState(0);
   const totalChooseSteps = 3;
 
-  // ★ 新邏輯：清淡(light) / 重口(rich)
   const [temp, setTemp] = useState<Temp | null>(null);
   const [hunger, setHunger] = useState<Hunger | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
@@ -653,7 +613,6 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  // 新增狀態：記錄目前搜尋半徑，從 1000 (1km) 開始
   const [searchRadius, setSearchRadius] = useState(1000); 
     
   const derived = useMemo(() => computeTags({ temp, hunger, budget }), [temp, hunger, budget]);
@@ -674,7 +633,6 @@ export default function App() {
     }
   }, []);
 
-  // ★ 核心邏輯：執行搜尋與 AI 過濾
   const searchPlacesWithRipple = async (radius: number, retryCount = 0) => {
     if (!userLocation || !BACKEND_API_URL || !BACKEND_GEMINI_URL) return;
     
@@ -682,7 +640,6 @@ export default function App() {
     setApiError(null);
 
     try {
-      // 1. 同心圓搜尋：向 Google 要資料 (radius 動態)
       const placesRes = await fetch(BACKEND_API_URL, { 
         method: "POST", 
         headers: { "Content-Type": "application/json" }, 
@@ -691,38 +648,33 @@ export default function App() {
           lng: userLocation.lng, 
           query: mapsQuery,
           language: navigator.language,
-          radius: radius // 傳入半徑
+          radius: radius 
         }) 
       });
 
       if (!placesRes.ok) throw new Error(await placesRes.text());
       const rawPlaces: Place[] = await placesRes.json();
 
-      // 2. 自動擴大機制：如果沒資料，且還沒擴展到極限 (例如 5km)，就擴大並重試
       if (rawPlaces.length === 0 && radius < 5000) {
          console.log(`範圍 ${radius}m 找不到，擴大搜尋至 ${radius * 2}m...`);
          setSearchRadius(radius * 2);
-         // 遞迴呼叫自己
          searchPlacesWithRipple(radius * 2, retryCount + 1);
-         return; // 結束這一輪，讓遞迴處理
+         return; 
       }
 
-      // 3. AI 過濾機制 (毒舌評審)
       if (rawPlaces.length > 0) {
-        // 呼叫 Gemini 進行過濾
         const filterRes = await fetch(BACKEND_GEMINI_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            mode: "filter", // 告訴後端這是過濾模式
+            mode: "filter", 
             candidates: rawPlaces,
             userTags: tags,
-            language: navigator.language // ★ 傳送語言參數，確保 AI 說對話
+            language: navigator.language
           }) 
         });
 
         const filterData = await filterRes.json();
-        // 解析 AI 回傳的 IDs (格式: { ids: [0, 5, 8] })
         let finalIndices = [];
         try {
            const jsonText = filterData.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -730,23 +682,29 @@ export default function App() {
            finalIndices = parsed.ids || [];
         } catch (e) {
            console.error("AI 解析失敗，使用原始排序", e);
-           finalIndices = [0, 1, 2]; // 降級處理
+           finalIndices = [0, 1, 2]; 
         }
 
-        // 根據 AI 挑的 ID 篩選出最終名單
         const aiSelectedPlaces = rawPlaces.filter((_, index) => finalIndices.includes(index));
         
-        // 如果 AI 殺太兇導致沒剩幾家，就補幾家原始的高分店
         const finalPlaces = aiSelectedPlaces.length > 0 ? aiSelectedPlaces : rawPlaces.slice(0, 3);
 
         const placesWithDist = finalPlaces.map((p) => {
             const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
-            return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
+            return { 
+                ...p, 
+                distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, 
+                distanceVal: d, 
+                type: temp ?? undefined, 
+                style: style, 
+                hunger: hunger ?? undefined, 
+                speed: speed ?? undefined 
+            };
         });
         
         setRealPlaces(placesWithDist);
       } else {
-        setRealPlaces([]); // 真的找不到
+        setRealPlaces([]); 
         setApiError("附近真的太荒涼了，找不到餐廳 QQ");
       }
 
@@ -758,12 +716,11 @@ export default function App() {
   };
 
   useEffect(() => {
-    // 當進入推薦頁面時，觸發同心圓搜尋
     if (screen === "recommend" && userLocation) {
-        setSearchRadius(1000); // 重置半徑
+        setSearchRadius(1000); 
         searchPlacesWithRipple(1000);
     }
-  }, [screen, userLocation, mapsQuery]); // 移除其他依賴，避免重複觸發
+  }, [screen, userLocation, mapsQuery]); 
 
   const visiblePlaces = useMemo(() => realPlaces.slice(0, VISIBLE_COUNT), [realPlaces]);
 
@@ -801,7 +758,6 @@ export default function App() {
   function nextChoose() { if (chooseStep < totalChooseSteps - 1) setChooseStep((s) => s + 1); else setScreen("recommend"); }
 
   function randomizeAll() {
-    // ★ 隨機功能也配合新標籤
     setTemp(Math.random() > 0.5 ? "light" : "rich");
     setHunger(Math.random() > 0.5 ? "full" : "snack");
     const rndBudget = Math.random() > 0.5 ? "cheap" : "expensive";
@@ -890,7 +846,7 @@ export default function App() {
 
     let targetPlace: Place | null = null;
      
-    const availableCandidates = filteredPlaces.filter(p => !suggestedPlaceIds.has(p.id));
+    const availableCandidates = realPlaces.filter(p => !suggestedPlaceIds.has(p.id));
     const hiddenCandidates = availableCandidates.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
 
     if (hiddenCandidates.length > 0) {
@@ -898,7 +854,7 @@ export default function App() {
     } else if (availableCandidates.length > 0) {
         targetPlace = availableCandidates[Math.floor(Math.random() * availableCandidates.length)];
     } else {
-        targetPlace = filteredPlaces[Math.floor(Math.random() * filteredPlaces.length)];
+        targetPlace = realPlaces[Math.floor(Math.random() * realPlaces.length)];
     }
 
     if (targetPlace) {
@@ -927,9 +883,9 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-            mode: "suggestion", // 這是大廚建議模式
+            mode: "suggestion", 
             prompt: prompt,
-            language: navigator.language // ★ 傳送語言參數
+            language: navigator.language 
         })
       });
       const data = await response.json();
@@ -994,7 +950,6 @@ export default function App() {
                     <div className="mt-4 flex justify-center w-full px-8">
                       <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleReEat(log[0])} className="group flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors hover:bg-black/5 w-full max-w-[320px]" style={{ color: warm.sub, maxWidth: 320 }}>
                         <div className="flex items-center justify-center gap-2 text-xs opacity-60 w-full" style={{ letterSpacing: "0.05em" }}>
-                            {/* 手動調整 strokeWidth 為 1.5，避免小圖標糊成一團 */}
                             <LucideRotateCcw size={12} color="currentColor" strokeWidth={1.5} />
                             <span>上次吃</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span>
                         </div>
@@ -1011,7 +966,6 @@ export default function App() {
                     >
                       {isRandomizing ? (
                           <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                              {/* ★ 修改 2：移除 font-bold，改為 fontWeight: 600，與原本按鈕一致 */}
                               <span className="animate-pulse text-base" style={{color: warm.orange, fontWeight: 600, letterSpacing: "0.05em"}}>隨緣覓食中...</span>
                           </div>
                       ) : (
@@ -1032,7 +986,6 @@ export default function App() {
                   <div className="mt-8 space-y-4">
                     {chooseStep === 0 && (
                       <>
-                        {/* ★ 修改 3：按鈕文案改為「清淡點」与「重口味」，3字 vs 3字，對稱 */}
                         <PillButton active={temp === "light"} onClick={() => setTemp("light")}>清淡點</PillButton>
                         <PillButton active={temp === "rich"} onClick={() => setTemp("rich")}>重口味</PillButton>
                         <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!temp}>下一步</PrimaryButton></div>
@@ -1172,7 +1125,6 @@ export default function App() {
                                     <LucidePin size={16} color={warm.orange} />
                                 )}
                                 {group.type === 'date' && (
-                                    // ★ 使用我們新做的「乾淨版」History 圖標 (時鐘+箭頭)
                                     <LucideHistory size={16} color={warm.orange} strokeWidth={1.5} />
                                 )}
                                 <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
