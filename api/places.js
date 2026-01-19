@@ -1,6 +1,17 @@
 // 這是 Vercel Serverless Function
+// 增加距離計算函式，嚴格把關
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; 
+}
+
 export default async function handler(req, res) {
-  // 1. 設定 CORS
   res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -9,8 +20,6 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 2. 取得參數 (新增 radius)
-  // 預設半徑 1000m (1km)，但允許前端傳入更大的值來進行「同心圓搜尋」
   const { lat, lng, query, language, radius = 1000 } = req.body;
 
   if (!lat || !lng) {
@@ -31,7 +40,6 @@ export default async function handler(req, res) {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        // 只抓取需要的欄位，特別是 priceLevel (價位) 和 types (類別) 供 AI 判斷
         "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.priceLevel,places.businessStatus,places.types"
       },
       body: JSON.stringify({
@@ -40,11 +48,11 @@ export default async function handler(req, res) {
         locationBias: {
           circle: {
             center: { latitude: lat, longitude: lng },
-            radius: radius // ★ 關鍵修改：使用動態半徑
+            radius: radius 
           }
         },
         openNow: true,
-        maxResultCount: 20 // ★ 關鍵修改：抓 20 家回來給 AI 挑，而不是只抓一點點
+        maxResultCount: 20 
       })
     });
 
@@ -54,21 +62,37 @@ export default async function handler(req, res) {
 
     const data = await googleRes.json();
 
-    // 整理資料
-    const cleanPlaces = (data.places || []).map(p => ({
+    let cleanPlaces = (data.places || []).map(p => ({
       id: p.id,
       name: p.displayName?.text,
       lat: p.location?.latitude,
       lng: p.location?.longitude,
       rating: p.rating,
       userRatingsTotal: p.userRatingCount,
-      // 轉換價格格式供前端與 AI 使用
       priceLevel: p.priceLevel, 
       price: (p.priceLevel === 'PRICE_LEVEL_INEXPENSIVE' || !p.priceLevel) ? 'budget' : 'mid', 
       googlePlaceId: p.id,
-      types: p.types, // 保留類別給 AI 參考
+      types: p.types,
       openNow: p.businessStatus === 'OPERATIONAL'
     }));
+
+    // ★★★ 距離鐵律 (Distance Hard Limit) ★★★
+    // Google 的 locationBias 有時會飄，我們要在這裡手動砍掉超過半徑的店
+    // 允許 10% 的誤差緩衝，超過就殺
+    const maxDistKm = (radius * 1.1) / 1000;
+    
+    cleanPlaces = cleanPlaces.filter(p => {
+      if (!p.lat || !p.lng) return false;
+      const dist = getDistanceFromLatLonInKm(lat, lng, p.lat, p.lng);
+      return dist <= maxDistKm;
+    });
+
+    // ★ 新增：後端先按距離排序一次，幫助 AI 優先看到近的
+    cleanPlaces.sort((a, b) => {
+        const distA = getDistanceFromLatLonInKm(lat, lng, a.lat, a.lng);
+        const distB = getDistanceFromLatLonInKm(lat, lng, b.lat, b.lng);
+        return distA - distB;
+    });
 
     res.status(200).json(cleanPlaces);
 
