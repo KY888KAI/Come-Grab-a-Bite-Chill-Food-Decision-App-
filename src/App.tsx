@@ -677,7 +677,6 @@ export default function App() {
 
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [suggestedPlaceIds, setSuggestedPlaceIds] = useState<Set<string>>(new Set());
 
   const [realPlaces, setRealPlaces] = useState<Place[]>([]);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
@@ -846,7 +845,6 @@ export default function App() {
     setChooseStep(0); setTemp(null); setHunger(null); setBudget(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
     setIsRandomMode(false); 
-    setSuggestedPlaceIds(new Set());
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
@@ -970,14 +968,6 @@ export default function App() {
         targetPlace = hiddenCandidates[Math.floor(Math.random() * hiddenCandidates.length)];
     } else {
         targetPlace = null;
-    }
-
-    if (targetPlace) {
-        setSuggestedPlaceIds(prev => {
-            const next = new Set(prev);
-            next.add(targetPlace!.id);
-            return next;
-        });
     }
 
     const userLang = navigator.language;
