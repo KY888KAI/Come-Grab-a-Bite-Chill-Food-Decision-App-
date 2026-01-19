@@ -19,9 +19,9 @@ const TRANSLATIONS = {
     next: "下一步",
     finish: "完成",
     recommendTitle: "附近可以吃什麼",
-    searching: "AI 正在挑選最佳餐廳...", // ★ 優化：更具體的 Loading
-    expanding: "附近選擇較少，正在擴大搜尋範圍...", // ★ 優化：進度提示
-    fallbackMessage: "附近找不到完全符合條件的店，\n這些是不錯的替代選擇：", // ★ 新增：退而求其次的提示
+    searching: "AI 正在挑選最佳餐廳...", 
+    expanding: "附近選擇較少，正在擴大搜尋範圍...", 
+    fallbackMessage: "附近找不到完全符合條件的店，\n這些是不錯的替代選擇：", 
     notFound: "附近真的太荒涼了，找不到餐廳 QQ",
     aiThinking: "AI 大廚正在思考...",
     aiRetry: "還是不滿意？再試一次",
@@ -680,7 +680,6 @@ export default function App() {
 
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [suggestedPlaceIds, setSuggestedPlaceIds] = useState<Set<string>>(new Set());
 
   const [realPlaces, setRealPlaces] = useState<Place[]>([]);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
@@ -763,14 +762,12 @@ export default function App() {
 
       if (rawPlaces.length === 0) {
          if (radius < 5000) {
-             // 擴大搜尋，這裡不設定 setRealPlaces
+             console.log(`[同心圓] ${radius}m 無結果，擴大至 ${radius * 2}m...`);
              searchPlacesWithRipple(radius * 2, retryCount + 1);
              return; 
          } else {
-             // 真的找不到，才顯示錯誤
              setRealPlaces([]);
              setApiError(t.notFound);
-             setIsRealLoading(false); // 確保 loading 結束
              return;
          }
       }
@@ -796,18 +793,14 @@ export default function App() {
            finalIndices = parsed.ids || [];
         } catch (e) {
            console.error("AI 解析失敗", e);
-           // AI 失敗時不應回傳空陣列，而是應該 fallback 到原始資料的前幾筆，或者回傳空讓後續邏輯處理
-           // 這裡我們假設 AI 失敗就回傳空，交給後續的保底邏輯
            finalIndices = [];
         }
 
         const aiSelectedPlaces = rawPlaces.filter((_, index) => finalIndices.includes(index));
         
-        // ★★★ 核心邏輯修正 ★★★
         if (aiSelectedPlaces.length === 0) {
-            // AI 覺得這批都不行
             if (radius < 5000) {
-                // 還沒到極限，繼續擴大搜尋
+                console.log(`[AI淘汰] ${radius}m 內無合格店家，擴大至 ${radius * 2}m...`);
                 searchPlacesWithRipple(radius * 2, retryCount + 1);
                 return;
             } else {
@@ -832,7 +825,6 @@ export default function App() {
             }
         }
 
-        // AI 有挑到，正常顯示
         const placesWithDist = aiSelectedPlaces.map((p) => {
             const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
             return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
@@ -851,8 +843,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    // 監聽 realPlaces 變化來關閉 loading 也可以，但上面的邏輯已經包含 setIsRealLoading(false)
-    // 這裡保留空依賴，避免重複執行
+    if (realPlaces.length > 0 || apiError) {
+        setIsRealLoading(false);
+    }
   }, [realPlaces, apiError]);
 
   useEffect(() => {
@@ -868,7 +861,6 @@ export default function App() {
     setChooseStep(0); setTemp(null); setHunger(null); setBudget(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
     setIsRandomMode(false); 
-    setSuggestedPlaceIds(new Set());
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
@@ -898,7 +890,6 @@ export default function App() {
   function nextChoose() { if (chooseStep < totalChooseSteps - 1) setChooseStep((s) => s + 1); else setScreen("recommend"); }
 
   function randomizeAll() {
-    // ★ 隨機功能也配合新標籤
     setTemp(Math.random() > 0.5 ? "light" : "rich");
     setHunger(Math.random() > 0.5 ? "full" : "snack");
     const rndBudget = Math.random() > 0.5 ? "cheap" : "expensive";
@@ -995,24 +986,24 @@ export default function App() {
         targetPlace = null;
     }
 
-    if (targetPlace) {
-        setSuggestedPlaceIds(prev => {
-            const next = new Set(prev);
-            next.add(targetPlace!.id);
-            return next;
-        });
-    }
+    const userLang = navigator.language;
+    const isChinese = userLang.toLowerCase().includes("zh");
+    const langRule = isChinese 
+        ? "請堅持使用繁體中文 (Traditional Chinese)，絕對禁止出現簡體中文或中國大陸用語。" 
+        : `Please respond in ${userLang}.`;
 
     let prompt = "";
     if (targetPlace) {
         prompt = `使用者想吃：${tags.join(', ')}。
         推薦一家店叫「${targetPlace.name}」。
-        請用繁體中文，給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
+        ${langRule}
+        請給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
         同時請安撫使用者，這家店雖然可能不是完美的 100分，但絕對值得一試。
         格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
     } else {
         prompt = `使用者想吃：${tags.join(', ')}。
         附近已經沒有其他符合條件的推薦店家的了。
+        ${langRule}
         請給出一個「通用的餐點建議」（例如：不如去便利商店買個關東煮？或是改吃水果？），語氣幽默一點。
         並且提供一個「精確的搜尋關鍵字 (keyword)」，讓使用者點擊後能在 Google Maps 上搜到結果（例如："便利商店", "水果店", "速食"）。
         回傳 JSON 格式：{ "dish": "通用建議標題", "reason": "一句話幽默建議(30字內)", "keyword": "精確搜尋關鍵字" }`;
