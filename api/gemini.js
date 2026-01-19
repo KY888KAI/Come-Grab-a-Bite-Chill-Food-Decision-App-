@@ -12,25 +12,31 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Missing Gemini API Key" });
   }
 
-  // ★ 接收前端傳來的 language 參數
-  const { mode, prompt, candidates, userTags, language = "zh-TW" } = req.body;
+  // ★ 新增接收 logicTags (邏輯代碼)
+  const { mode, prompt, candidates, userTags, logicTags = [], language = "zh-TW" } = req.body;
 
-  // ★ 語言鐵律 (Language Strict Rule)
-  // 這段是為了防止 AI 講出簡體中文或中國用語
   const langInstruction = language.toLowerCase().includes("zh") 
-    ? "【語言鐵律 (Language Rule)】：你必須使用「繁體中文 (Traditional Chinese, Taiwan)」回答。絕對禁止出現簡體中文或中國大陸用語（如：質量、視頻、土豆、性價比）。"
+    ? "【語言鐵律 (Language Rule)】：你必須使用「繁體中文 (Traditional Chinese, Taiwan)」回答。絕對禁止出現簡體中文或中國大陸用語。"
     : `【Language Rule】: Please respond in ${language}.`;
 
   let finalPrompt = "";
 
   if (mode === "filter") {
-    // ★★★ 核心邏輯：AI 毒舌評審模式 ★★★
     
-    const candidatesStr = candidates.map((p, i) => 
-      `${i}. [${p.name}] (評分:${p.rating}, 價位:${p.priceLevel || '未知'})`
-    ).join("\n");
+    const candidatesStr = candidates.map((p, i) => {
+      const typesStr = p.types ? p.types.join(", ") : "未知類別";
+      return `${i}. [${p.name}] (評分:${p.rating}, 價位:${p.priceLevel || '未知'}, 類別:${typesStr})`;
+    }).join("\n");
 
-    const tagsStr = userTags.join(", ");
+    const tagsStr = userTags.join(", "); // 這是給 AI 寫文案參考用的 (可以是任何語言)
+
+    // ★★★ 修正：使用 logicTags (固定英文代碼) 來判斷規則，確保不受語言影響 ★★★
+    const isCheap = logicTags.includes("CHEAP");
+    const isExpensive = logicTags.includes("EXPENSIVE");
+    const isFull = logicTags.includes("FULL");
+    const isSnack = logicTags.includes("SNACK");
+    const isLight = logicTags.includes("LIGHT");
+    const isRich = logicTags.includes("RICH");
 
     finalPrompt = `
       ${langInstruction}
@@ -42,38 +48,33 @@ export default async function handler(req, res) {
       【候選名單】：
       ${candidatesStr}
 
-      【全方位邏輯審查規則】：
-      請針對使用者的標籤組合進行「三維度」交叉審查。
+      【全方位邏輯審查規則 (Logic Code Check)】：
 
-      1. [預算維度 Budget] (此維度需嚴格執行)
-         - 若標籤有「隨便吃吃」：【絕對禁止】推薦中高價位餐廳（如燒肉、火鍋、牛排、餐酒館、Omakase）。目標是平價、日常飲食、高CP值的選擇。
-         - 若標籤有「犒賞自己」：請過濾掉過於普通的廉價快餐。優先尋找有氣氛、特色強、或是該類別中評價極高的名店。
+      1. [預算維度 Budget]
+         ${isCheap ? `- 標籤含 CHEAP (隨便吃吃)：【絕對禁止】推薦中高價位餐廳。若 priceLevel 是 PRICE_LEVEL_EXPENSIVE 或類別含 fine_dining，直接淘汰。` : ''}
+         ${isExpensive ? `- 標籤含 EXPENSIVE (犒賞自己)：請過濾掉過於普通的廉價快餐。優先選氣氛好、特色強的餐廳。` : ''}
 
-      2. [份量維度 Hunger] (依據用餐性質判斷)
-         - 若標籤有「吃飽」：必須是正餐類。AI 請判斷該店是否提供「能當作一餐」的主食。
-         - 若標籤有「解饞」：優先推薦非正餐時段也能輕鬆享用的食物，如小吃、點心、甜點、飲料。避免推薦負擔過重的「吃到飽」或「大份量合菜」。
+      2. [份量維度 Hunger]
+         ${isFull ? `- 標籤含 FULL (吃飽)：必須是正餐類。禁止推薦 cafe, bakery, dessert_shop, bar。` : ''}
+         ${isSnack ? `- 標籤含 SNACK (解饞)：優先推薦小吃、點心。` : ''}
 
-      3. [口味維度 Style] (特徵導向審查)
-         - 若標籤有「清淡點」：
-           - 【特徵定義】：尋找低油、低鹽、烹調方式簡單（蒸、煮、涼拌）、強調食材原味、吃完身體無負擔的食物。
-           - 【絕對黑名單 (Dead Logic)】：店名或類別若包含「麻辣、爆炒、重慶、川菜、炭烤、烈火、油炸、肥腸、濃厚」，直接淘汰，避免使用者產生認知衝突。
-           - 【AI 判斷】：請發揮你的理解力，只要該店家的招牌菜色或整體風格符合「清爽無負擔」的特徵即可入選，不侷限於特定菜色。
+      3. [口味維度 Style]
+         ${isLight ? `- 標籤含 LIGHT (清淡點)：
+           - 【嚴格類別檢查】：若類別包含 "fried_chicken", "fast_food", "barbecue", "pizza", "hamburger"，**直接淘汰**！
+           - 【關鍵字黑名單】：店名若含「炸雞、酥脆、爆汁、麻辣、燒肉」，淘汰。
+           - 優先錄取：health_food, vegetarian, japanese_restaurant (壽司/生魚片), porridge, noodle (清湯)。` : ''}
          
-         - 若標籤有「重口味」：
-           - 【特徵定義】：尋找味覺衝擊強烈、醬汁濃厚、辛香料豐富、高熱量、或者能帶來強烈滿足感的食物。
-           - 【AI 判斷】：請發揮你的理解力，優先挑選能刺激味蕾的店家（如鹹、辣、酸、炸、烤），不侷限於特定菜色。
+         ${isRich ? `- 標籤含 RICH (重口味)：
+           - 優先錄取：spicy, curry, barbecue, fried, fast_food, thai, mexican。` : ''}
 
       【最終一致性檢查】：
-      - 請模擬人類直覺：如果店名跟使用者的任何一個需求有「視覺上或認知上」的明顯衝突（例如選「清淡」卻出現「猛火快炒」），直接淘汰。
-      - 如果所有店家都被淘汰（符合條件者為 0），請直接回傳空的 ids 陣列 \`[]\`。絕對不要為了湊數而硬挑不符合的店家。這非常重要！因為我們會根據空名單來自動擴大搜尋範圍。
+      - 如果所有店家都被淘汰，請直接回傳空的 ids 陣列 \`[]\`。絕對不要為了湊數而硬挑不符合的店家。
 
       請回傳 JSON 格式，包含一個 ids 陣列，裡面是選中的 3 家店的編號 (index)。
       格式範例：{ "ids": [0, 5, 12] }
       不要解釋，只要 JSON。
     `;
   } else {
-    // 原本的 AI 大廚推薦模式
-    // 這裡也要加上 langInstruction，因為這裡 AI 會生成文字，最容易出現簡體字
     finalPrompt = `
       ${langInstruction}
       ${prompt}
