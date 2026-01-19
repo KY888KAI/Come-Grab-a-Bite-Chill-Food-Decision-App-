@@ -1,6 +1,4 @@
 // 這是 Vercel Serverless Function
-// 它運行在後端，所以可以安全地使用 process.env.GOOGLE_MAPS_API_KEY
-
 export default async function handler(req, res) {
   // 1. 設定 CORS
   res.setHeader('Access-Control-Allow-Origin', '*'); 
@@ -11,21 +9,20 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 2. 取得前端傳來的參數 (新增 language)
-  const { lat, lng, query, language } = req.body;
+  // 2. 取得參數 (新增 radius)
+  // 預設半徑 1000m (1km)，但允許前端傳入更大的值來進行「同心圓搜尋」
+  const { lat, lng, query, language, radius = 1000 } = req.body;
 
   if (!lat || !lng) {
     return res.status(400).json({ error: "Missing location data" });
   }
 
-  // 3. 從 Vercel 環境變數拿鑰匙
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
   if (!apiKey) {
     return res.status(500).json({ error: "Server Configuration Error: Missing API Key" });
   }
 
-  // 4. 呼叫 Google Places API (New)
   const googleApiUrl = "https://places.googleapis.com/v1/places:searchText";
 
   try {
@@ -34,34 +31,30 @@ export default async function handler(req, res) {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        // 只抓取需要的欄位
-        "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.priceLevel,places.businessStatus"
+        // 只抓取需要的欄位，特別是 priceLevel (價位) 和 types (類別) 供 AI 判斷
+        "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.priceLevel,places.businessStatus,places.types"
       },
       body: JSON.stringify({
-        textQuery: query || "餐廳",
-        // ★ 關鍵修改：使用前端傳來的語系，如果沒有則預設繁體中文
+        textQuery: query || "美食",
         languageCode: language || "zh-TW", 
         locationBias: {
           circle: {
             center: { latitude: lat, longitude: lng },
-            radius: 1000.0 // 1公里
+            radius: radius // ★ 關鍵修改：使用動態半徑
           }
         },
         openNow: true,
-        maxResultCount: 20
+        maxResultCount: 20 // ★ 關鍵修改：抓 20 家回來給 AI 挑，而不是只抓一點點
       })
     });
 
     if (!googleRes.ok) {
-      // 捕捉 Google 回傳的詳細錯誤文字
-      const errorText = await googleRes.text();
-      console.error(`Google API Error (${googleRes.status}):`, errorText);
-      throw new Error(`Google 拒絕連線 (${googleRes.status}): ${errorText}`);
+      throw new Error(`Google API Error: ${googleRes.status}`);
     }
 
     const data = await googleRes.json();
 
-    // 5. 整理資料
+    // 整理資料
     const cleanPlaces = (data.places || []).map(p => ({
       id: p.id,
       name: p.displayName?.text,
@@ -69,8 +62,11 @@ export default async function handler(req, res) {
       lng: p.location?.longitude,
       rating: p.rating,
       userRatingsTotal: p.userRatingCount,
-      price: (p.priceLevel === 'PRICE_LEVEL_INEXPENSIVE' || !p.priceLevel) ? 'budget' : 'mid',
+      // 轉換價格格式供前端與 AI 使用
+      priceLevel: p.priceLevel, 
+      price: (p.priceLevel === 'PRICE_LEVEL_INEXPENSIVE' || !p.priceLevel) ? 'budget' : 'mid', 
       googlePlaceId: p.id,
+      types: p.types, // 保留類別給 AI 參考
       openNow: p.businessStatus === 'OPERATIONAL'
     }));
 
@@ -78,10 +74,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Backend Error:", error);
-    // 將詳細錯誤回傳給前端，方便除錯
-    res.status(500).json({ 
-      error: "Google API 呼叫失敗", 
-      details: error.message 
-    });
+    res.status(500).json({ error: "Google API 呼叫失敗", details: error.message });
   }
 }
