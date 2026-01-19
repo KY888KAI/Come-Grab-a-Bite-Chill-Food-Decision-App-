@@ -22,13 +22,16 @@ export default async function handler(req, res) {
   let finalPrompt = "";
 
   if (mode === "filter") {
+    // ★★★ 核心邏輯：AI 毒舌評審模式 ★★★
     
     const candidatesStr = candidates.map((p, i) => {
       const typesStr = p.types ? p.types.join(", ") : "未知類別";
       return `${i}. [${p.name}] (評分:${p.rating}, 價位:${p.priceLevel || '未知'}, 類別:${typesStr})`;
     }).join("\n");
 
-    const tagsStr = userTags.join(", "); 
+    const tagsStr = userTags.join(", "); // 這是給 AI 寫文案參考用的
+
+    // ★★★ 修正：使用 logicTags (固定英文代碼) 來判斷規則，確保不受語言影響 ★★★
     const isCheap = logicTags.includes("CHEAP");
     const isExpensive = logicTags.includes("EXPENSIVE");
     const isFull = logicTags.includes("FULL");
