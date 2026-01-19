@@ -207,6 +207,7 @@ type AiSuggestion = {
   dish: string;
   reason: string;
   targetPlace?: Place;
+  keyword?: string; // ★ 新增：AI 給的精確搜尋關鍵字
 } | null;
 
 const warm = {
@@ -985,11 +986,13 @@ export default function App() {
         同時請安撫使用者，這家店雖然可能不是完美的 100分，但絕對值得一試。
         格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
     } else {
+        // ★ 關鍵修改：要求 AI 回傳精確的 searchKeyword
         prompt = `使用者想吃：${tags.join(', ')}。
         附近已經沒有其他符合條件的推薦店家的了。
         ${langRule}
         請給出一個「通用的餐點建議」（例如：不如去便利商店買個關東煮？或是改吃水果？），語氣幽默一點。
-        回傳 JSON 格式：{ "dish": "通用建議", "reason": "一句話幽默建議(30字內)" }`;
+        並且提供一個「精確的搜尋關鍵字 (searchKeyword)」，讓使用者點擊後能在 Google Maps 上搜到結果（例如："便利商店", "水果店", "速食"）。
+        回傳 JSON 格式：{ "dish": "通用建議標題", "reason": "一句話幽默建議(30字內)", "keyword": "精確搜尋關鍵字" }`;
     }
 
     try {
@@ -1187,7 +1190,8 @@ export default function App() {
                             </div>
                         )}
                         <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{color: "#6B5D52"}}>{aiSuggestion.reason}</div>
-                        <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
+                        {/* ★ 修正：點擊按鈕時，優先使用 keyword 作為搜尋字串 */}
+                        <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.keyword || aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
                       </motion.div>
                     )}
                     <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
