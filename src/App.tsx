@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
 // --- 核心修正：Icon 元件 ---
-// 問題原因：原本的寫法導致 props 順序打架，顏色(stroke)被錯誤解讀
-// 修正方式：調整屬性展開順序，並強制鎖定 stroke (顏色) 與 strokeWidth (粗細)
 const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
@@ -13,21 +11,39 @@ const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ..
     fill="none" 
     strokeLinecap="round" 
     strokeLinejoin="round" 
-    {...props} // 1. 先展開其他雜項屬性
-    stroke={color} // 2. 強制指定顏色 (這會覆蓋掉 props 裡面的錯誤設定)
-    strokeWidth={strokeWidth} // 3. 強制指定粗細
-    style={{ minWidth: size, minHeight: size }} // 4. 防呆：防止被外部容器擠壓變形
+    {...props} 
+    stroke={color} 
+    strokeWidth={strokeWidth} 
+    style={{ minWidth: size, minHeight: size }} 
   >
     {children}
   </svg>
 );
 
-const LucideRotateCcw = (props: any) => <Icon {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" /><path d="M3 3v9h9" /></Icon>;
+// [上次吃] 使用的圖標 (你提供的完美版本)
+const LucideRotateCcw = (props: any) => (
+  <Icon {...props}>
+    <polyline points="1 4 1 10 7 10" />
+    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+  </Icon>
+);
+
+// [回顧/歷史] 專用圖標 (學習修正版：使用 RotateCcw 基底 + 時鐘指針)
+const LucideHistory = (props: any) => (
+  <Icon {...props}>
+    {/* 基底：乾淨的逆時針圓弧 */}
+    <polyline points="1 4 1 10 7 10" />
+    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    
+    {/* 加上：時鐘指針 (代表時間/歷史) */}
+    <polyline points="12 6 12 12 16 14" />
+  </Icon>
+);
+
 const LucideTrash2 = (props: any) => <Icon {...props}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></Icon>;
 const LucidePin = (props: any) => <Icon {...props}><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" /></Icon>;
 const LucideHome = (props: any) => <Icon {...props}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>;
 const LucideX = (props: any) => <Icon {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
-const LucideHistory = (props: any) => <Icon {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" /><path d="M3 3v9h9" /><path d="M12 7v5l3 3" /></Icon>;
 const LucideChevronLeft = (props: any) => <Icon {...props}><path d="m15 18-6-6 6-6" /></Icon>;
 
 const LS_KEY = "whatnow_energy_log_v2"; 
@@ -447,12 +463,14 @@ function TopBar({
 }) {
   
   const btnClassName = "flex items-center justify-center w-10 h-10 rounded-xl backdrop-blur-md shadow-sm active:scale-95 transition-all";
+  
+  // ★ 修改 1：按鈕樣式優化，邊框和圖標改為品牌橘色
   const btnCustomStyle = {
       background: "rgba(255, 255, 255, 0.4)",
-      borderColor: "rgba(255, 138, 61, 0.18)",
+      borderColor: "rgba(255, 138, 61, 0.35)", // 加深一點的橘色邊框
       borderWidth: "1px",
       borderStyle: "solid",
-      color: "#595048"
+      color: "#FF9F5E" // 圖標改為橘色
   };
 
   const renderBtn = (onClick: () => void, icon: React.ReactNode) => (
@@ -466,7 +484,7 @@ function TopBar({
 
   if (screen === 'home') {
      if (hasLog) {
-         rightBtn = renderBtn(onOpenLog, <LucideHistory size={20} />);
+         rightBtn = renderBtn(onOpenLog, <LucideHistory size={20} strokeWidth={1.75} />);
      }
   } else if (screen === 'choose') {
      leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
@@ -898,8 +916,8 @@ export default function App() {
                     <div className="mt-4 flex justify-center w-full px-8">
                       <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleReEat(log[0])} className="group flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors hover:bg-black/5 w-full max-w-[320px]" style={{ color: warm.sub, maxWidth: 320 }}>
                         <div className="flex items-center justify-center gap-2 text-xs opacity-60 w-full" style={{ letterSpacing: "0.05em" }}>
-                            {/* 手動調整 strokeWidth 為 1.25，避免小圖標糊成一團 */}
-                            <LucideRotateCcw size={12} color="currentColor" strokeWidth={1.25} />
+                            {/* 手動調整 strokeWidth 為 1.5，避免小圖標糊成一團 */}
+                            <LucideRotateCcw size={12} color="currentColor" strokeWidth={1.5} />
                             <span>上次吃</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span>
                         </div>
                         <div className="text-base leading-snug font-medium text-center w-full break-words opacity-80" style={{ color: warm.text }}>{(log[0].choiceText || "").replace("搜尋：", "")}</div>
@@ -915,7 +933,8 @@ export default function App() {
                     >
                       {isRandomizing ? (
                           <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                              <span className="animate-pulse text-base font-bold" style={{color: warm.orange}}>隨緣覓食中...</span>
+                              {/* ★ 修改 2：移除 font-bold，改為 fontWeight: 600，與原本按鈕一致 */}
+                              <span className="animate-pulse text-base" style={{color: warm.orange, fontWeight: 600, letterSpacing: "0.05em"}}>隨緣覓食中...</span>
                           </div>
                       ) : (
                           <>
@@ -1073,8 +1092,8 @@ export default function App() {
                                     <LucidePin size={16} color={warm.orange} />
                                 )}
                                 {group.type === 'date' && (
-                                    // 手動調整 strokeWidth 為 1.5，避免 16px 下線條太粗
-                                    <LucideRotateCcw size={16} color={warm.orange} strokeWidth={1.5} />
+                                    // ★ 使用我們新做的「乾淨版」History 圖標 (時鐘+箭頭)
+                                    <LucideHistory size={16} color={warm.orange} strokeWidth={1.5} />
                                 )}
                                 <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
