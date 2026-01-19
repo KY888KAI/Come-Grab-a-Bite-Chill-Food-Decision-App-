@@ -109,14 +109,11 @@ const TRANSLATIONS = {
   }
 };
 
-// 簡單的語言偵測 Hook
 function useLanguage() {
-  // 如果是中文 (zh-TW, zh-CN) 就用 zh，否則全部用 en
   const langCode = navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
   return TRANSLATIONS[langCode];
 }
 
-// --- Icon 元件 (底層邏輯修復：強制分離顏色與粗細) ---
 const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
@@ -135,7 +132,6 @@ const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ..
   </svg>
 );
 
-// [上次吃] 圖標
 const LucideRotateCcw = (props: any) => (
   <Icon {...props}>
     <polyline points="1 4 1 10 7 10" />
@@ -143,7 +139,6 @@ const LucideRotateCcw = (props: any) => (
   </Icon>
 );
 
-// [回顧/歷史] 圖標 (修正：使用 RotateCcw 基底 + 時鐘指針)
 const LucideHistory = (props: any) => (
   <Icon {...props}>
     <polyline points="1 4 1 10 7 10" />
@@ -291,7 +286,6 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
   return R * c; 
 }
 
-// 修正：標籤生成也支援多語言
 function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }, t: any) {
   const { temp, hunger, budget } = args;
   const tags: string[] = [];
@@ -321,14 +315,9 @@ function navigateToMap(url: string) {
   }
 }
 
-// ★★★★ 核心修正：組裝人性化的語意搜尋字串 (國際化通用版) ★★★★
-// 修正 1：改用英文關鍵字 (English Keywords)，確保全球各地 (東京、巴黎、紐約) 都能搜到結果。
-// 修正 2：保留「絕對條件疊加」，確保三個維度的需求都被滿足。
 function buildMapsQuery(tags: string[]) {
-  // 注意：這裡 tags 可能會因為 computeTags 的 i18n 變成中文或英文
-  // 但我們這裡需要的是原始的「邏輯狀態」來組裝英文 Query
-  // 所以我們不依賴 tags 陣列的字面值，而是在 App component 裡根據 state 來組裝
-  // 這裡僅保留函式簽章，實際邏輯移到 App 內部直接用 state
+  // 這裡不再使用 tags (中文/英文) 來組裝，而是改用 App component 內的 state 直接組裝英文 Query
+  // 所以這裡保留空函式或移除皆可，邏輯已移至 App 內部
   return ""; 
 }
 
@@ -706,8 +695,6 @@ export default function App() {
   const tags = derived.tags;
   const style: Style = budget === "expensive" ? "rich" : "light";
   
-  // ★ 組裝搜尋字串：這裡使用 state 中的原始值 (light/rich 等) 來對應英文關鍵字，而不是用翻譯後的 tags
-  // 這樣無論 UI 顯示哪種語言，搜尋引擎收到的都是標準的英文指令 (如: "cheap healthy restaurant")
   const mapsQuery = useMemo(() => {
     let queryParts = [];
     
@@ -731,6 +718,7 @@ export default function App() {
     if (hunger === "full") finalParts.push("restaurant");
     if (hunger === "snack") finalParts.push("snacks");
     
+    // 如果沒選類型，補一個通用詞 (理論上不會發生，因為有預設值)
     if (!hunger) finalParts.push("food");
     
     return finalParts.join(" ");
@@ -755,6 +743,15 @@ export default function App() {
     setIsRealLoading(true);
     setApiError(null);
     setSearchRadius(radius);
+
+    // ★ 準備 logicTags (給 AI 判斷用的固定代碼)
+    const logicTags = [];
+    if (temp === 'light') logicTags.push("LIGHT");
+    if (temp === 'rich') logicTags.push("RICH");
+    if (budget === 'cheap') logicTags.push("CHEAP");
+    if (budget === 'expensive') logicTags.push("EXPENSIVE");
+    if (hunger === 'full') logicTags.push("FULL");
+    if (hunger === 'snack') logicTags.push("SNACK");
 
     try {
       const placesRes = await fetch(BACKEND_API_URL, { 
@@ -792,6 +789,7 @@ export default function App() {
             mode: "filter", 
             candidates: rawPlaces,
             userTags: tags, // 傳送當前語言的標籤 (AI 懂多國語言，且有 Prompt 輔助)
+            logicTags: logicTags, // ★ 傳送固定代碼，確保邏輯判斷 0 失誤
             language: navigator.language 
           }) 
         });
@@ -997,7 +995,7 @@ export default function App() {
     if (targetPlace) {
         prompt = `使用者想吃：${tags.join(', ')}。
         推薦一家店叫「${targetPlace.name}」。
-        請給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
+        請用繁體中文，給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
         同時請安撫使用者，這家店雖然可能不是完美的 100分，但絕對值得一試。
         格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
     } else {
