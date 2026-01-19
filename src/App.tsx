@@ -28,13 +28,11 @@ const LucideRotateCcw = (props: any) => (
   </Icon>
 );
 
-// [回顧/歷史] 圖標 (修正：使用 RotateCcw 基底 + 時鐘指針)
+// [回顧/歷史] 圖標
 const LucideHistory = (props: any) => (
   <Icon {...props}>
-    {/* 基底 */}
     <polyline points="1 4 1 10 7 10" />
     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-    {/* 指針 */}
     <polyline points="12 6 12 12 16 14" />
   </Icon>
 );
@@ -50,8 +48,8 @@ const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count";
 const BACKEND_API_URL = "/api/places"; 
 const BACKEND_GEMINI_URL = "/api/gemini";
 
-// ★ 修改：標籤定義更新
-type Temp = "light" | "rich"; // 清淡點 / 重口味
+// 標籤定義更新
+type Temp = "light" | "rich"; 
 type Hunger = "full" | "snack"; 
 type Speed = "fast" | "sit";
 type Style = "light" | "rich";
@@ -179,7 +177,6 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
   return R * c; 
 }
 
-// ★ 修改：標籤生成 (清淡點/重口味)
 function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }) {
   const { temp, hunger, budget } = args;
   const t: string[] = [];
@@ -210,7 +207,6 @@ function navigateToMap(url: string) {
   }
 }
 
-// ★ 修改：搜尋關鍵字邏輯更新
 function buildMapsQuery(tags: string[]) {
   const hour = new Date().getHours();
   const isMorning = hour >= 5 && hour < 11;
@@ -224,15 +220,8 @@ function buildMapsQuery(tags: string[]) {
   const isCheap = tags.includes("隨便吃吃");
   const isExpensive = tags.includes("犒賞自己");
 
-  const prefixes = ["人氣", "在地", "必吃", "評價高", "隱藏版", "老字號", "排隊", "道地", "TOP"];
-  if (isCheap) prefixes.push("平價", "銅板美食", "高CP值", "便宜");
-  if (isExpensive) prefixes.push("精緻", "高級", "氣氛好", "聚餐");
-
-  const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-
   let categories: string[] = [];
 
-  // 通用搜尋詞，讓後端 AI 來做主要過濾
   if (hasFull) {
       if (isMorning) {
           categories.push("早午餐", "飯糰", "鹹粥", "蛋餅", "早餐店");
@@ -262,7 +251,7 @@ function buildMapsQuery(tags: string[]) {
   }
 
   const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
-  return selectedCategory; // 這裡不加 randomPrefix，讓後端搜尋更廣，避免過度限縮
+  return selectedCategory;
 }
 
 function useLocalStorageLog() {
@@ -475,7 +464,6 @@ function TopBar({
   
   const btnClassName = "flex items-center justify-center w-10 h-10 rounded-xl backdrop-blur-md shadow-sm active:scale-95 transition-all";
   
-  // ★ 修改：TopBar 按鈕顏色橘色化
   const btnCustomStyle = {
       background: "rgba(255, 255, 255, 0.4)",
       borderColor: "rgba(255, 138, 61, 0.35)", 
@@ -528,7 +516,6 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   const jitter = mode === "chaos" ? 6 : 0;
     
   const palette = useMemo(() => {
-    // 配合 "light/rich" 更新視覺
     if (temp === "rich") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," }; 
     if (temp === "light") return { a: "rgba(255, 160, 130, ", b: "rgba(240, 248, 255, ", ring: "rgba(176, 224, 230, 0.5)", glowColor: "rgba(255, 180, 160," }; 
     return { a: "rgba(255, 138, 61, ", b: "rgba(255, 211, 106, ", ring: "rgba(255, 138, 61, 0.28)", glowColor: "rgba(255, 138, 61," };
@@ -591,6 +578,7 @@ export default function App() {
   const [chooseStep, setChooseStep] = useState(0);
   const totalChooseSteps = 3;
 
+  // ★ 新邏輯：清淡(light) / 重口(rich)
   const [temp, setTemp] = useState<Temp | null>(null);
   const [hunger, setHunger] = useState<Hunger | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
@@ -634,7 +622,7 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  // 新增：搜尋半徑狀態
+  // 新增狀態：記錄目前搜尋半徑，從 1000 (1km) 開始
   const [searchRadius, setSearchRadius] = useState(1000); 
     
   const derived = useMemo(() => computeTags({ temp, hunger, budget }), [temp, hunger, budget]);
@@ -680,11 +668,18 @@ export default function App() {
       if (!placesRes.ok) throw new Error(await placesRes.text());
       const rawPlaces: Place[] = await placesRes.json();
 
-      // 如果 Google 什麼都沒抓到，直接擴大範圍 (如果還沒到 5km)
-      if (rawPlaces.length === 0 && radius < 5000) {
-         console.log(`[同心圓] ${radius}m 無結果，擴大至 ${radius * 2}m...`);
-         searchPlacesWithRipple(radius * 2, retryCount + 1);
-         return; 
+      // 如果 Google 什麼都沒抓到
+      if (rawPlaces.length === 0) {
+         if (radius < 5000) {
+             console.log(`[同心圓] ${radius}m 無結果，擴大至 ${radius * 2}m...`);
+             searchPlacesWithRipple(radius * 2, retryCount + 1);
+             return; 
+         } else {
+             // 5km 還是沒抓到 raw data，顯示錯誤
+             setRealPlaces([]);
+             setApiError("附近找不到符合條件的店"); // ★ 精確符合文案
+             return;
+         }
       }
 
       // 2. AI 過濾 (The Gatekeeper)
@@ -708,22 +703,27 @@ export default function App() {
            finalIndices = parsed.ids || [];
         } catch (e) {
            console.error("AI 解析失敗", e);
-           // AI 壞掉時，不做過濾，保留 rawPlaces (這是一種容錯，但風險是可能出現不精準結果)
-           // 為了 0 失誤，這裡其實應該報錯，但為了 APP 不掛點，我們保留原始資料並記錄錯誤
-           finalIndices = rawPlaces.map((_, i) => i);
+           // 解析失敗時不顯示任何店，視同過濾失敗，避免顯示錯誤結果
+           finalIndices = [];
         }
 
         const aiSelectedPlaces = rawPlaces.filter((_, index) => finalIndices.includes(index));
         
-        // ★ 關鍵判斷：如果 AI 過濾後變成 0 家，代表這區的店都不行，必須擴大範圍！
-        if (aiSelectedPlaces.length === 0 && radius < 5000) {
-            console.log(`[AI淘汰] ${radius}m 內無合格店家，擴大至 ${radius * 2}m...`);
-            searchPlacesWithRipple(radius * 2, retryCount + 1);
-            return;
+        // ★ 關鍵判斷：如果 AI 過濾後變成 0 家，擴大範圍！
+        if (aiSelectedPlaces.length === 0) {
+            if (radius < 5000) {
+                console.log(`[AI淘汰] ${radius}m 內無合格店家，擴大至 ${radius * 2}m...`);
+                searchPlacesWithRipple(radius * 2, retryCount + 1);
+                return;
+            } else {
+                // 5km 內 AI 還是覺得都不行，顯示錯誤 (不再補位！)
+                setRealPlaces([]); 
+                setApiError("附近找不到符合條件的店"); // ★ 精確符合文案
+                return;
+            }
         }
 
-        // 如果擴大到極限還是 0，或者有找到店，就顯示結果
-        // 這裡不再做「補位」，有多少顯示多少
+        // 有找到合格的店 -> 顯示結果
         const placesWithDist = aiSelectedPlaces.map((p) => {
             const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
             return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
@@ -732,32 +732,33 @@ export default function App() {
         // ★ 排序：由近到遠
         placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
         
-        if (placesWithDist.length === 0) {
-            setRealPlaces([]); 
-            setApiError("抱歉，附近找不到符合條件的餐廳");
-        } else {
-            setRealPlaces(placesWithDist);
-        }
+        setRealPlaces(placesWithDist);
 
-      } else {
-        // 5km 內連 raw data 都沒有
-        setRealPlaces([]); 
-        setApiError("附近真的太荒涼了，找不到餐廳 QQ");
       }
 
     } catch (err: any) {
       setApiError(`API Error: ${err.message}`);
     } finally {
-      // 只有在不是遞迴呼叫時才關閉 loading，避免閃爍
-      // 但因為是 async 遞迴，這裡簡單處理：只要有結果或 error 就關閉
-      // 在遞迴中，新的 searchPlacesWithRipple 會再次 setTrue
-      // 我們可以不做特別處理，因為新請求會很快覆蓋
+      // 只有在不是遞迴呼叫 (即找到了結果，或者真的出錯了) 時才關閉 loading
+      // 我們可以檢查：如果現在這輪結束了，而且沒有觸發下一輪，就關 loading
+      // 簡單判斷法：如果設定了 error 或者 realPlaces 有東西，就是結束了
+      // 但因為 React state update 是 async，這裡用 radius 判斷比較準
     }
-    // 確保最後一次執行會關閉 loading
-    if (radius >= 5000 || (realPlaces.length > 0)) {
+    // 讓 UI 保持 Loading 直到有結果或報錯
+    // 這裡我們不主動 setFalse，而是依賴上述邏輯分支中的 return
+    // 但為了保險，我們在「確認結束」的地方 setFalse (上面的 return 前)
+    // 修正寫法：把 setIsRealLoading(false) 移到每個 return 之前
+    // 為了代碼整潔，我們在 useEffect 中監聽 realPlaces 或 apiError 的變化來關閉 loading 比較安全？
+    // 不，直接在上面的邏輯中處理最直觀。
+    // 由於 searchPlacesWithRipple 是 async，我們可以在每個「終點」加。
+  };
+
+  // 監聽狀態變化來關閉 Loading (更安全的做法)
+  useEffect(() => {
+    if (realPlaces.length > 0 || apiError) {
         setIsRealLoading(false);
     }
-  };
+  }, [realPlaces, apiError]);
 
   useEffect(() => {
     if (screen === "recommend" && userLocation) {
@@ -1033,7 +1034,7 @@ export default function App() {
                   <div className="mt-8 space-y-4">
                     {chooseStep === 0 && (
                       <>
-                        {/* ★ 修改 3：按鈕文案改為「清淡點」与「重口味」，3字 vs 3字，對稱 */}
+                        {/* 修改：按鈕文案改為「清淡點」与「重口味」 */}
                         <PillButton active={temp === "light"} onClick={() => setTemp("light")}>清淡點</PillButton>
                         <PillButton active={temp === "rich"} onClick={() => setTemp("rich")}>重口味</PillButton>
                         <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!temp}>下一步</PrimaryButton></div>
