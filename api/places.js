@@ -39,7 +39,7 @@ export default async function handler(req, res) {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        // ★ 確保抓取 businessStatus 和 currentOpeningHours (雖然 API 參數 openNow=true 已經過濾，但多拿資料給 AI 判斷更好)
+        // 抓取必要的欄位，包含 priceLevel 與 types 供 AI 判斷
         "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.priceLevel,places.businessStatus,places.types"
       },
       body: JSON.stringify({
@@ -76,7 +76,7 @@ export default async function handler(req, res) {
       openNow: p.businessStatus === 'OPERATIONAL'
     }));
 
-    // 1. 距離過濾
+    // 1. 距離過濾 (物理鐵律：超過半徑 10% 還是要砍，不然會出現 25km 的店)
     const maxDistKm = (radius * 1.1) / 1000;
     cleanPlaces = cleanPlaces.filter(p => {
       if (!p.lat || !p.lng) return false;
@@ -84,13 +84,13 @@ export default async function handler(req, res) {
       return dist <= maxDistKm;
     });
 
-    // 2. 評分過濾 (後端第一道防線)
-    // 如果結果夠多 (>5)，先砍掉 3.8 以下的雷店，減輕 AI 負擔
-    if (cleanPlaces.length > 5) {
-        cleanPlaces = cleanPlaces.filter(p => (p.rating || 0) >= 3.8);
-    }
+    // ★ 修改：移除之前的「評分過濾」
+    // 我們不應該在這裡把 3.8 分以下的店殺掉。
+    // 因為如果地點很偏僻，這可能是唯一的選擇。
+    // 把裁量權完全交給後端 AI (gemini.js) 去判斷是否要「破例錄取」。
 
-    // 3. 排序 (距離優先)
+    // 2. 排序 (距離優先)
+    // 確保前端在做保底顯示時，拿到的一定是距離最近的
     cleanPlaces.sort((a, b) => {
         const distA = getDistanceFromLatLonInKm(lat, lng, a.lat, a.lng);
         const distB = getDistanceFromLatLonInKm(lat, lng, b.lat, b.lng);
