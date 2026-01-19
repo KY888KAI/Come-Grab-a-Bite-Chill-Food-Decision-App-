@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     
     const candidatesStr = candidates.map((p, i) => {
       const typesStr = p.types ? p.types.join(", ") : "未知類別";
-      return `${i}. [${p.name}] (評分:${p.rating}, 價位:${p.priceLevel || '未知'}, 類別:${typesStr})`;
+      return `${i}. [${p.name}] (評分:${p.rating}, 價位等級:${p.priceLevel || '無資料'}, 類別:${typesStr})`;
     }).join("\n");
 
     const tagsStr = userTags.join(", "); 
@@ -56,19 +56,19 @@ export default async function handler(req, res) {
          - 原則上只錄取 **評分 4.0 以上** 的店家。
          - 例外：如果該店極度符合使用者需求（例如半夜唯一開著的清粥小菜），且評分不低於 3.5，可以破例錄取。
 
-      3. [預算維度 Budget]
+      3. [預算維度 Budget] (★ 關鍵修正：放寬標準)
          ${isCheap ? `- 標籤含 CHEAP (隨便吃吃)：
-           - 接受 Price Level 1 (Cheap)。
-           - 接受 Price Level 2 (Moderate) **前提是** 它是小吃、麵店、便當類 (非餐廳)。
-           - 絕對淘汰 Price Level 3, 4 或 Fine Dining。` : ''}
+           - 嚴格鎖定 Price Level 1 (Inexpensive / 平價)。
+           - 如果沒有 Price Level 資料：請根據店名、類別判斷，必須是路邊攤、小吃店、便當店、平價連鎖速食。
+           - 絕對淘汰：看起來像需要服務費的餐廳、異國料理餐廳 (除非明顯是平價版)、居酒屋。` : ''}
          ${isExpensive ? `- 標籤含 EXPENSIVE (犒賞自己)：
-           - 接受 Price Level 3, 4。
-           - 接受 Price Level 2 **前提是** 評分高於 4.4 且氣氛佳的餐廳 (火鍋、居酒屋)。
-           - 絕對淘汰小吃攤、便當店、速食店。` : ''}
+           - 包含 Price Level 2 (Moderate), 3 (Expensive), 4 (Very Expensive)。也就是說，只要不是 Level 1 的平價店，都算。
+           - 重點在於「體驗」：即使是中價位 (Level 2)，只要評分高、氣氛好、是有質感的定食或火鍋，都算犒賞。
+           - 絕對淘汰：便當店、路邊攤、環境簡陋的小吃、手搖飲店。` : ''}
 
       4. [份量維度 Hunger]
          ${isFull ? `- 標籤含 FULL (吃飽)：必須是正餐類。禁止推薦 cafe, bakery, dessert_shop, bar。` : ''}
-         ${isSnack ? `- 標籤含 SNACK (解饞)：優先推薦小吃、點心。允許便利商店/超市，但優先級最低。` : ''}
+         ${isSnack ? `- 標籤含 SNACK (解饞)：優先推薦小吃、點心。便利商店/超市為最後順位。` : ''}
 
       5. [口味維度 Style]
          ${isLight ? `- 標籤含 LIGHT (清淡點)：
@@ -79,10 +79,10 @@ export default async function handler(req, res) {
            - 優先錄取：spicy, curry, barbecue, fried, fast_food, thai, mexican。` : ''}
 
       6. [超商/量販店處理]：
-         - 除非使用者選「解饞」且附近真的沒餐廳，否則盡量不要推薦 convenience_store 或 supermarket。它們是最後的備案。
+         - 除非使用者選「解饞」且附近真的沒餐廳，否則盡量不要推薦 convenience_store 或 supermarket。
 
       【最終輸出】：
-      - 如果所有店家都被淘汰，請直接回傳空的 ids 陣列 \`[]\`。**這非常重要！不要硬湊數！**
+      - 如果所有店家都被淘汰，請直接回傳空的 ids 陣列 \`[]\`。
       - 我們會根據空名單自動觸發「退而求其次」的保底機制。
 
       請回傳 JSON 格式，包含一個 ids 陣列，裡面是選中的 3 家店的編號 (index)。
