@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
-import { LucideUtensils, LucideMapPin, LucideChefHat, LucideRotateCcw, LucideTrash2, LucidePin, LucideArrowRight, LucideHome, LucideX, LucideHistory, LucideChevronLeft } from "lucide-react";
+import { LucideRotateCcw, LucideTrash2, LucidePin, LucideHome, LucideX, LucideHistory, LucideChevronLeft } from "lucide-react";
 
 const LS_KEY = "whatnow_energy_log_v2"; 
 const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; 
