@@ -1,6 +1,77 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
-import { LucideRotateCcw, LucideTrash2, LucidePin, LucideHome, LucideX, LucideHistory, LucideChevronLeft } from "lucide-react";
+
+// --- 內建圖示區 (解決找不到套件的問題) ---
+// 這裡將原本外連的圖示改為直接內建，不用安裝任何東西就能跑
+const IconWrapper = ({ size = 24, color = "currentColor", children, ...props }: any) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke={color} 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    {...props}
+  >
+    {children}
+  </svg>
+);
+
+const LucideRotateCcw = (props: any) => (
+  <IconWrapper {...props}>
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" />
+    <path d="M3 3v9h9" />
+  </IconWrapper>
+);
+
+const LucideTrash2 = (props: any) => (
+  <IconWrapper {...props}>
+    <path d="M3 6h18" />
+    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    <line x1="10" x2="10" y1="11" y2="17" />
+    <line x1="14" x2="14" y1="11" y2="17" />
+  </IconWrapper>
+);
+
+const LucidePin = (props: any) => (
+  <IconWrapper {...props}>
+    <line x1="12" x2="12" y1="17" y2="22" />
+    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+  </IconWrapper>
+);
+
+const LucideHome = (props: any) => (
+  <IconWrapper {...props}>
+    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </IconWrapper>
+);
+
+const LucideX = (props: any) => (
+  <IconWrapper {...props}>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </IconWrapper>
+);
+
+const LucideHistory = (props: any) => (
+  <IconWrapper {...props}>
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" />
+    <path d="M3 3v9h9" />
+    <path d="M12 7v5l4 2" />
+  </IconWrapper>
+);
+
+const LucideChevronLeft = (props: any) => (
+  <IconWrapper {...props}>
+    <path d="m15 18-6-6 6-6" />
+  </IconWrapper>
+);
+// --- 圖示區結束 ---
 
 const LS_KEY = "whatnow_energy_log_v2"; 
 const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; 
@@ -139,10 +210,10 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
 function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }) {
   const { temp, hunger, budget } = args;
   const t: string[] = [];
-   
+    
   if (temp) t.push(temp === "hot" ? "熱食" : "冷食");
   if (hunger) t.push(hunger === "full" ? "吃飽" : "解饞");
-  
+   
   // 嚴格對應預算按鈕，只給一個標籤
   if (budget === "cheap") t.push("隨便吃吃");
   if (budget === "expensive") t.push("犒賞自己");
@@ -177,7 +248,7 @@ function buildMapsQuery(tags: string[]) {
   const hasCold = tags.includes("冷食");
   const hasFull = tags.includes("吃飽");
   const hasSnack = tags.includes("解饞");
-  
+   
   // 判斷預算 (注意：這裡必須對應 computeTags 產出的標籤文字)
   const isCheap = tags.includes("隨便吃吃");
   const isExpensive = tags.includes("犒賞自己");
@@ -486,7 +557,7 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
   const jitter = mode === "chaos" ? 6 : 0;
-   
+    
   const palette = useMemo(() => {
     if (temp === "hot") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," };
     if (temp === "cold") return { a: "rgba(255, 160, 130, ", b: "rgba(240, 248, 255, ", ring: "rgba(176, 224, 230, 0.5)", glowColor: "rgba(255, 180, 160," };
@@ -562,7 +633,7 @@ export default function App() {
   const pressTimer = useRef<number | null>(null);
   const [pressing, setPressing] = useState(false);
   const [isRandomizing, setIsRandomizing] = useState(false); // 新增隨機洗牌動畫狀態
-   
+    
   const [isRandomMode, setIsRandomMode] = useState(false);
 
   const MAX_TEASE_COUNT = 3;
@@ -596,7 +667,7 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-   
+    
   const derived = useMemo(() => computeTags({ temp, hunger, budget }), [temp, hunger, budget]);
   const tags = derived.tags;
   // const style = derived.style; // 不再從 computeTags 直接獲取，改用 budget 對應
@@ -621,7 +692,7 @@ export default function App() {
       if (!BACKEND_API_URL) return;
       setIsRealLoading(true);
       setApiError(null);
-       
+        
       const payload = { 
         lat: userLocation.lat, 
         lng: userLocation.lng, 
@@ -650,7 +721,7 @@ export default function App() {
 
   const filteredPlaces = useMemo(() => {
     if (!BACKEND_API_URL || realPlaces.length === 0) return [];
-    
+     
     const scored = realPlaces.map(p => {
       let score = 0;
       if (p.type === temp) score += 4; 
@@ -659,12 +730,12 @@ export default function App() {
       if (p.speed === speed) score += 1;
       return { place: p, score: score };
     });
-    
+     
     const candidates = scored.filter(s => s.score >= 2); 
     const finalPool = candidates.length > 0 ? candidates : scored;
-    
+     
     finalPool.sort((a, b) => (a.place.distanceVal ?? 9999) - (b.place.distanceVal ?? 9999));
-    
+     
     return finalPool.slice(0, 20).map(s => s.place);
   }, [temp, hunger, speed, style, realPlaces]);
 
@@ -700,7 +771,7 @@ export default function App() {
       setIsRandomMode(false); 
       setScreen("choose"); 
   }
-   
+    
   function nextChoose() { if (chooseStep < totalChooseSteps - 1) setChooseStep((s) => s + 1); else setScreen("recommend"); }
 
   function randomizeAll() {
@@ -772,7 +843,7 @@ export default function App() {
     const name = typeof place === 'string' ? place : place.name;
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     const url = getGoogleMapsUrl(name, placeId); 
-    
+     
     saveEnergy(name, false); 
     setScreen("energy");
     navigateToMap(url);
@@ -780,7 +851,7 @@ export default function App() {
 
   function handleSearchCategory() {
     const url = getGoogleMapsUrl(mapsQuery);
-    
+     
     saveEnergy(`搜尋：${mapsQuery}`, true); 
     setScreen("energy"); 
     navigateToMap(url);
@@ -798,7 +869,7 @@ export default function App() {
     setIsAiLoading(true);
 
     let targetPlace: Place | null = null;
-    
+     
     const availableCandidates = filteredPlaces.filter(p => !suggestedPlaceIds.has(p.id));
     const hiddenCandidates = availableCandidates.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
 
@@ -837,7 +908,7 @@ export default function App() {
         body: JSON.stringify({ prompt: prompt })
       });
       const data = await response.json();
-       
+        
       let suggestion = null;
       if (data.dish) {
           suggestion = data;
@@ -871,8 +942,8 @@ export default function App() {
   }
 
   const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" } as const;
-   
-  const showBack = screen !== "home" && screen !== "energy" && screen !== "log"; 
+    
+  // 移除了未使用到的 showBack 變數
 
   return (
     <div className="min-h-screen w-full flex items-start justify-center px-3" style={{ background: warm.bg, color: warm.text }}>
@@ -963,16 +1034,16 @@ export default function App() {
                     <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} />
                     <div className="mt-4 flex flex-wrap gap-2 justify-center">{tags.map((t) => (<Tag key={t}>{t}</Tag>))}</div>
                   </div>
-                   
+                    
                   <div className="mt-4 space-y-4">
                     {isRealLoading && (
                       <div className="py-8 text-center text-gray-400 animate-pulse text-sm">
                           正在搜尋附近的美味...
                       </div>
                     )}
-                    
+                     
                     {apiError && <div className="py-8 text-center text-red-400 text-sm">{apiError}</div>}
-                    
+                     
                     {visiblePlaces.map((p) => {
                       return (
                         <motion.button 
