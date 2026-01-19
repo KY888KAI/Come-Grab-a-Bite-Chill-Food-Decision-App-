@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
+// --- 核心修正：Icon 元件 ---
+// 問題原因：原本的寫法導致 props 順序打架，顏色(stroke)被錯誤解讀
+// 修正方式：調整屬性展開順序，並強制鎖定 stroke (顏色) 與 strokeWidth (粗細)
 const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
@@ -8,11 +11,12 @@ const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ..
     height={size} 
     viewBox="0 0 24 24" 
     fill="none" 
-    stroke={color} 
-    strokeWidth={strokeWidth} 
     strokeLinecap="round" 
     strokeLinejoin="round" 
-    {...props}
+    {...props} // 1. 先展開其他雜項屬性
+    stroke={color} // 2. 強制指定顏色 (這會覆蓋掉 props 裡面的錯誤設定)
+    strokeWidth={strokeWidth} // 3. 強制指定粗細
+    style={{ minWidth: size, minHeight: size }} // 4. 防呆：防止被外部容器擠壓變形
   >
     {children}
   </svg>
@@ -894,7 +898,8 @@ export default function App() {
                     <div className="mt-4 flex justify-center w-full px-8">
                       <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleReEat(log[0])} className="group flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors hover:bg-black/5 w-full max-w-[320px]" style={{ color: warm.sub, maxWidth: 320 }}>
                         <div className="flex items-center justify-center gap-2 text-xs opacity-60 w-full" style={{ letterSpacing: "0.05em" }}>
-                            <LucideRotateCcw size={12} color="currentColor" />
+                            {/* 手動調整 strokeWidth 為 1.25，避免小圖標糊成一團 */}
+                            <LucideRotateCcw size={12} color="currentColor" strokeWidth={1.25} />
                             <span>上次吃</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span>
                         </div>
                         <div className="text-base leading-snug font-medium text-center w-full break-words opacity-80" style={{ color: warm.text }}>{(log[0].choiceText || "").replace("搜尋：", "")}</div>
@@ -1068,7 +1073,8 @@ export default function App() {
                                     <LucidePin size={16} color={warm.orange} />
                                 )}
                                 {group.type === 'date' && (
-                                    <LucideRotateCcw size={16} color={warm.orange} />
+                                    // 手動調整 strokeWidth 為 1.5，避免 16px 下線條太粗
+                                    <LucideRotateCcw size={16} color={warm.orange} strokeWidth={1.5} />
                                 )}
                                 <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
