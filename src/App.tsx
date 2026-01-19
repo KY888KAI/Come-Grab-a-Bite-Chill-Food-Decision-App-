@@ -19,7 +19,7 @@ const TRANSLATIONS = {
     next: "下一步",
     finish: "完成",
     recommendTitle: "附近可以吃什麼",
-    searching: "正在挑選最佳餐廳...", 
+    searching: "AI 正在挑選最佳餐廳...", 
     expanding: "附近選擇較少，正在擴大搜尋範圍...", 
     fallbackMessage: "附近找不到完全符合條件的店，\n這些是不錯的替代選擇：", 
     notFound: "附近真的太荒涼了，找不到餐廳 QQ",
@@ -72,9 +72,10 @@ const TRANSLATIONS = {
     next: "Next",
     finish: "Done",
     recommendTitle: "What's Nearby",
-    searching: "Searching for delicious food...",
-    expanding: "Expanding search radius",
-    notFound: "No places found matching your criteria.",
+    searching: "AI is picking the best spots...",
+    expanding: "Expanding search area...",
+    fallbackMessage: "Couldn't find perfect matches,\nhere are some good alternatives:",
+    notFound: "No places found even after expanding search.",
     aiThinking: "AI Chef is thinking...",
     aiRetry: "Not happy? Try again",
     aiHelp: "Let AI Chef decide for you",
@@ -694,7 +695,7 @@ export default function App() {
     let queryParts = [];
     
     if (budget === "cheap") queryParts.push("cheap", "budget", "affordable");
-    if (budget === "expensive") queryParts.push("fancy", "fine dining", "upscale", "premium", "popular", "best rated", "quality"); // ★ 擴充關鍵字
+    if (budget === "expensive") queryParts.push("fancy", "fine dining", "upscale");
     
     if (temp === "light") queryParts.push("light", "healthy", "fresh");
     if (temp === "rich") queryParts.push("rich flavor", "savory", "heavy");
@@ -704,11 +705,9 @@ export default function App() {
     
     let finalParts = [];
     if (budget === "cheap") finalParts.push("cheap");
-    if (budget === "expensive") finalParts.push("premium"); // ★ 改用 premium 涵蓋中高價位
-    
+    if (budget === "expensive") finalParts.push("fancy");
     if (temp === "light") finalParts.push("healthy");
     if (temp === "rich") finalParts.push("savory");
-    
     if (hunger === "full") finalParts.push("restaurant");
     if (hunger === "snack") finalParts.push("snacks");
     
@@ -805,7 +804,6 @@ export default function App() {
                 searchPlacesWithRipple(radius * 2, retryCount + 1);
                 return;
             } else {
-                // 退而求其次保底機制
                 const fallbackPlaces = rawPlaces
                     .sort((a, b) => (b.rating || 0) - (a.rating || 0)) 
                     .slice(0, 3);
@@ -1080,7 +1078,6 @@ export default function App() {
                     <div className="mt-4 flex justify-center w-full px-8">
                       <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleReEat(log[0])} className="group flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors hover:bg-black/5 w-full max-w-[320px]" style={{ color: warm.sub, maxWidth: 320 }}>
                         <div className="flex items-center justify-center gap-2 text-xs opacity-60 w-full" style={{ letterSpacing: "0.05em" }}>
-                            {/* 手動調整 strokeWidth 為 1.5，避免小圖標糊成一團 */}
                             <LucideRotateCcw size={12} color="currentColor" strokeWidth={1.5} />
                             <span>{t.lastEat}</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span>
                         </div>
@@ -1097,7 +1094,6 @@ export default function App() {
                     >
                       {isRandomizing ? (
                           <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                              {/* 修正：字重 600，間距 0.05em，與沒想法一致 */}
                               <span className="animate-pulse text-base" style={{color: warm.orange, fontWeight: 600, letterSpacing: "0.05em"}}>{t.randoming}</span>
                           </div>
                       ) : (
@@ -1118,7 +1114,6 @@ export default function App() {
                   <div className="mt-8 space-y-4">
                     {chooseStep === 0 && (
                       <>
-                        {/* 修改：按鈕文案改為「清淡點」与「重口味」 */}
                         <PillButton active={temp === "light"} onClick={() => setTemp("light")}>{t.light}</PillButton>
                         <PillButton active={temp === "rich"} onClick={() => setTemp("rich")}>{t.rich}</PillButton>
                         <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!temp}>{t.next}</PrimaryButton></div>
@@ -1210,7 +1205,6 @@ export default function App() {
                             </div>
                         )}
                         <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{color: "#6B5D52"}}>{aiSuggestion.reason}</div>
-                        {/* ★ 修正：點擊按鈕時，優先使用 keyword 作為搜尋字串 */}
                         <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.keyword || aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
                       </motion.div>
                     )}
