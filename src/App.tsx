@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
-// --- 內建圖示區 (解決找不到套件的問題) ---
-// 這裡將原本外連的圖示改為直接內建，不用安裝任何東西就能跑
-const IconWrapper = ({ size = 24, color = "currentColor", children, ...props }: any) => (
+const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
     width={size} 
@@ -11,7 +9,7 @@ const IconWrapper = ({ size = 24, color = "currentColor", children, ...props }: 
     viewBox="0 0 24 24" 
     fill="none" 
     stroke={color} 
-    strokeWidth="2" 
+    strokeWidth={strokeWidth} 
     strokeLinecap="round" 
     strokeLinejoin="round" 
     {...props}
@@ -20,62 +18,16 @@ const IconWrapper = ({ size = 24, color = "currentColor", children, ...props }: 
   </svg>
 );
 
-const LucideRotateCcw = (props: any) => (
-  <IconWrapper {...props}>
-    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" />
-    <path d="M3 3v9h9" />
-  </IconWrapper>
-);
-
-const LucideTrash2 = (props: any) => (
-  <IconWrapper {...props}>
-    <path d="M3 6h18" />
-    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-    <line x1="10" x2="10" y1="11" y2="17" />
-    <line x1="14" x2="14" y1="11" y2="17" />
-  </IconWrapper>
-);
-
-const LucidePin = (props: any) => (
-  <IconWrapper {...props}>
-    <line x1="12" x2="12" y1="17" y2="22" />
-    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
-  </IconWrapper>
-);
-
-const LucideHome = (props: any) => (
-  <IconWrapper {...props}>
-    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <polyline points="9 22 9 12 15 12 15 22" />
-  </IconWrapper>
-);
-
-const LucideX = (props: any) => (
-  <IconWrapper {...props}>
-    <path d="M18 6 6 18" />
-    <path d="m6 6 12 12" />
-  </IconWrapper>
-);
-
-const LucideHistory = (props: any) => (
-  <IconWrapper {...props}>
-    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" />
-    <path d="M3 3v9h9" />
-    <path d="M12 7v5l4 2" />
-  </IconWrapper>
-);
-
-const LucideChevronLeft = (props: any) => (
-  <IconWrapper {...props}>
-    <path d="m15 18-6-6 6-6" />
-  </IconWrapper>
-);
-// --- 圖示區結束 ---
+const LucideRotateCcw = (props: any) => <Icon {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" /><path d="M3 3v9h9" /></Icon>;
+const LucideTrash2 = (props: any) => <Icon {...props}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></Icon>;
+const LucidePin = (props: any) => <Icon {...props}><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" /></Icon>;
+const LucideHome = (props: any) => <Icon {...props}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>;
+const LucideX = (props: any) => <Icon {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
+const LucideHistory = (props: any) => <Icon {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" /><path d="M3 3v9h9" /><path d="M12 7v5l3 3" /></Icon>;
+const LucideChevronLeft = (props: any) => <Icon {...props}><path d="m15 18-6-6 6-6" /></Icon>;
 
 const LS_KEY = "whatnow_energy_log_v2"; 
 const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; 
-// 使用相對路徑，自動對應您的 Vercel 網域
 const BACKEND_API_URL = "/api/places"; 
 const BACKEND_GEMINI_URL = "/api/gemini";
 
@@ -83,7 +35,7 @@ type Temp = "hot" | "cold";
 type Hunger = "full" | "snack"; 
 type Speed = "fast" | "sit";
 type Style = "light" | "rich";
-type Budget = "cheap" | "expensive"; // 新增預算類型
+type Budget = "cheap" | "expensive";
 
 type Screen = "home" | "choose" | "recommend" | "energy" | "log";
 
@@ -206,7 +158,6 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
   return R * c; 
 }
 
-// 修改標籤邏輯，嚴格限制為3個標籤
 function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }) {
   const { temp, hunger, budget } = args;
   const t: string[] = [];
@@ -214,7 +165,6 @@ function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: B
   if (temp) t.push(temp === "hot" ? "熱食" : "冷食");
   if (hunger) t.push(hunger === "full" ? "吃飽" : "解饞");
    
-  // 嚴格對應預算按鈕，只給一個標籤
   if (budget === "cheap") t.push("隨便吃吃");
   if (budget === "expensive") t.push("犒賞自己");
 
@@ -238,7 +188,6 @@ function navigateToMap(url: string) {
   }
 }
 
-// 修改搜尋邏輯，配合新的標籤文字
 function buildMapsQuery(tags: string[]) {
   const hour = new Date().getHours();
   const isMorning = hour >= 5 && hour < 11;
@@ -249,14 +198,11 @@ function buildMapsQuery(tags: string[]) {
   const hasFull = tags.includes("吃飽");
   const hasSnack = tags.includes("解饞");
    
-  // 判斷預算 (注意：這裡必須對應 computeTags 產出的標籤文字)
   const isCheap = tags.includes("隨便吃吃");
   const isExpensive = tags.includes("犒賞自己");
 
   const prefixes = ["人氣", "在地", "必吃", "評價高", "隱藏版", "老字號", "排隊", "道地", "TOP"];
-  // 如果是平價，加入平價關鍵字
   if (isCheap) prefixes.push("平價", "銅板美食", "高CP值", "便宜");
-  // 如果是精緻，加入高級關鍵字
   if (isExpensive) prefixes.push("精緻", "高級", "氣氛好", "聚餐");
 
   const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
@@ -280,7 +226,6 @@ function buildMapsQuery(tags: string[]) {
       categories = ["美食", "小吃", "餐廳"];
   }
 
-  // 根據預算稍微調整類別
   if (isExpensive && categories.length < 5) {
       categories.push("居酒屋", "餐酒館", "日本料理");
   }
@@ -314,7 +259,7 @@ function Tag({ children }: { children: React.ReactNode }) {
         background: "rgba(255, 211, 106, 0.15)", 
         color: "#6B5D52",
         border: "1px solid rgba(255, 138, 61, 0.2)", 
-        fontSize: "11px" // Replaced text-[11px]
+        fontSize: "11px"
       }}
     >
       {children}
@@ -349,13 +294,13 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
         style={{ background }}
       >
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
-           <LucidePin size={20} fill="currentColor" stroke="none" />
+           <LucidePin size={20} color="currentColor" strokeWidth={2} />
            <span className="font-bold text-sm">釘選</span>
         </div>
 
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
            <span className="font-bold text-sm">刪除</span>
-           <LucideTrash2 size={20} />
+           <LucideTrash2 size={20} color="currentColor" strokeWidth={2} />
         </div>
       </motion.div>
 
@@ -398,7 +343,7 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
             <div className="flex justify-between items-center mb-1">
                 <div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>
                 {item.isPinned && (
-                    <LucidePin size={14} fill={warm.orange} stroke="none" />
+                    <LucidePin size={14} color={warm.orange} />
                 )}
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
@@ -479,7 +424,6 @@ function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longP
   );
 }
 
-// 修改 TopBar 以支持 Icon 和不同的按鈕邏輯
 function TopBar({ 
   screen, 
   isRandomMode, 
@@ -498,8 +442,6 @@ function TopBar({
   title: string;
 }) {
   
-  // 統一的按鈕樣式：圓角矩形 (rounded-xl) + 毛玻璃
-  // 完全移除 JIT，使用標準 style
   const btnClassName = "flex items-center justify-center w-10 h-10 rounded-xl backdrop-blur-md shadow-sm active:scale-95 transition-all";
   const btnCustomStyle = {
       background: "rgba(255, 255, 255, 0.4)",
@@ -519,28 +461,22 @@ function TopBar({
   let rightBtn = null;
 
   if (screen === 'home') {
-     // 首頁：左邊空，右邊歷史 (如果有的話)
      if (hasLog) {
          rightBtn = renderBtn(onOpenLog, <LucideHistory size={20} />);
      }
   } else if (screen === 'choose') {
-     // 選擇頁：左邊返回，右邊關閉(回首頁)
      leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
      rightBtn = renderBtn(onGoHome, <LucideX size={22} />);
   } else if (screen === 'recommend') {
      if (isRandomMode) {
-         // 隨機模式結果：左邊回首頁 (House)
          leftBtn = renderBtn(onGoHome, <LucideHome size={20} />);
      } else {
-         // 一般模式結果：左邊返回修改，右邊關閉(回首頁)
          leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
          rightBtn = renderBtn(onGoHome, <LucideX size={22} />);
      }
   } else if (screen === 'energy') {
-      // 紀錄完成頁：左邊回首頁
        leftBtn = renderBtn(onGoHome, <LucideHome size={20} />);
   } else if (screen === 'log') {
-      // 歷史紀錄頁：左邊返回 (回首頁)
       leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
   }
 
@@ -578,7 +514,6 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
            
             <motion.div 
                 key="core-shape"
-                // Replaced JIT rounded-[42%] with style
                 className="absolute inset-6" 
                 animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }} 
                 transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }} 
@@ -586,7 +521,6 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
             />
             <motion.div 
                 key="mist-shape"
-                // Replaced JIT rounded-[48%] with style
                 className="absolute inset-10" 
                 animate={mode === "chaos" ? { opacity: [0.25, 0.6, 0.35, 0.7, 0.25], x: [0, 2, -2, 1, 0], y: [0, -1, 2, -2, 0] } : { opacity: [0.35, 0.55, 0.35] }} 
                 transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} 
@@ -599,7 +533,6 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   );
 }
 
-// 修改 ProgressDots 允許點擊回溯
 function ProgressDots({ step, total, onStepClick }: { step: number; total: number; onStepClick: (idx: number) => void }) {
   return (
     <div className="flex items-center justify-center gap-2 mt-4">
@@ -627,12 +560,12 @@ export default function App() {
   const [temp, setTemp] = useState<Temp | null>(null);
   const [hunger, setHunger] = useState<Hunger | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
-  const [richness, setRichness] = useState(0.5); // 仍保留此狀態供視覺 Core 使用
-  const [speed, setSpeed] = useState<Speed | null>(null); // 保留但由 budget 隱性控制
+  const [richness, setRichness] = useState(0.5); 
+  const [speed, setSpeed] = useState<Speed | null>(null); 
 
   const pressTimer = useRef<number | null>(null);
   const [pressing, setPressing] = useState(false);
-  const [isRandomizing, setIsRandomizing] = useState(false); // 新增隨機洗牌動畫狀態
+  const [isRandomizing, setIsRandomizing] = useState(false); 
     
   const [isRandomMode, setIsRandomMode] = useState(false);
 
@@ -670,7 +603,6 @@ export default function App() {
     
   const derived = useMemo(() => computeTags({ temp, hunger, budget }), [temp, hunger, budget]);
   const tags = derived.tags;
-  // const style = derived.style; // 不再從 computeTags 直接獲取，改用 budget 對應
   const style: Style = budget === "expensive" ? "rich" : "light";
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
 
@@ -777,7 +709,6 @@ export default function App() {
   function randomizeAll() {
     setTemp(Math.random() > 0.5 ? "hot" : "cold");
     setHunger(Math.random() > 0.5 ? "full" : "snack");
-    // 隨機預算，這也會連動影響 richness 和 speed
     const rndBudget = Math.random() > 0.5 ? "cheap" : "expensive";
     setBudget(rndBudget);
     if (rndBudget === "cheap") {
@@ -789,10 +720,8 @@ export default function App() {
     }
   }
 
-  // 新增：隨機按鈕點擊處理 (取代原本的長按邏輯)
   function handleRandomClick() {
       setIsRandomizing(true);
-      // 0.6秒的過場動畫時間
       setTimeout(() => {
           randomizeAll();
           setIsRandomizing(false);
@@ -801,10 +730,8 @@ export default function App() {
       }, 600);
   }
 
-  // 處理預算選擇
   function handleBudgetSelect(b: Budget) {
       setBudget(b);
-      // 連動設定視覺效果與潛在屬性
       if (b === "cheap") {
           setRichness(0.3);
           setSpeed("fast");
@@ -813,8 +740,6 @@ export default function App() {
           setSpeed("sit");
       }
   }
-
-  // 移除舊的長按相關函式 handlePressDown, handlePressUp
 
   function saveEnergy(choiceText: string, isCategory: boolean = false) {
     const entry: LogEntry = {
@@ -943,8 +868,6 @@ export default function App() {
 
   const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" } as const;
     
-  // 移除了未使用到的 showBack 變數
-
   return (
     <div className="min-h-screen w-full flex items-start justify-center px-3" style={{ background: warm.bg, color: warm.text }}>
       <div className="w-full max-w-[420px]" style={{ maxWidth: 420 }}>
@@ -970,7 +893,10 @@ export default function App() {
                   {log.length > 0 && log[0] && (
                     <div className="mt-4 flex justify-center w-full px-8">
                       <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleReEat(log[0])} className="group flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors hover:bg-black/5 w-full max-w-[320px]" style={{ color: warm.sub, maxWidth: 320 }}>
-                        <div className="flex items-center justify-center gap-2 text-xs opacity-60 w-full" style={{ letterSpacing: "0.05em" }}><span>↺ 上次吃</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span></div>
+                        <div className="flex items-center justify-center gap-2 text-xs opacity-60 w-full" style={{ letterSpacing: "0.05em" }}>
+                            <LucideRotateCcw size={12} color="currentColor" />
+                            <span>上次吃</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span>
+                        </div>
                         <div className="text-base leading-snug font-medium text-center w-full break-words opacity-80" style={{ color: warm.text }}>{(log[0].choiceText || "").replace("搜尋：", "")}</div>
                       </motion.button>
                     </div>
@@ -1125,7 +1051,7 @@ export default function App() {
                         disabled={log.length === 0}
                         title="清空本機紀錄"
                     >
-                        <LucideTrash2 size={18} />
+                        <LucideTrash2 size={18} color={warm.orange} />
                     </button>
                   </div>
                   <div className="flex-1 overflow-y-auto relative px-6">
@@ -1139,10 +1065,10 @@ export default function App() {
                           <div key={group.title} className="mb-6">
                             <div className="flex items-center gap-2 mb-2 ml-1">
                                 {group.type === 'pinned' && (
-                                    <LucidePin size={16} stroke={warm.orange} />
+                                    <LucidePin size={16} color={warm.orange} />
                                 )}
                                 {group.type === 'date' && (
-                                    <LucideRotateCcw size={16} stroke={warm.orange} />
+                                    <LucideRotateCcw size={16} color={warm.orange} />
                                 )}
                                 <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
