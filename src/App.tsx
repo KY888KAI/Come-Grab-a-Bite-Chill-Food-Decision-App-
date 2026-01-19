@@ -19,9 +19,10 @@ const TRANSLATIONS = {
     next: "下一步",
     finish: "完成",
     recommendTitle: "附近可以吃什麼",
-    searching: "正在搜尋附近的美味...",
-    expanding: "擴大搜尋範圍中",
-    notFound: "附近找不到符合條件的店",
+    searching: "AI 正在挑選最佳餐廳...", // ★ 優化：更具體的 Loading
+    expanding: "附近選擇較少，正在擴大搜尋範圍...", // ★ 優化：進度提示
+    fallbackMessage: "附近找不到完全符合條件的店，\n這些是不錯的替代選擇：", // ★ 新增：退而求其次的提示
+    notFound: "附近真的太荒涼了，找不到餐廳 QQ",
     aiThinking: "AI 大廚正在思考...",
     aiRetry: "還是不滿意？再試一次",
     aiHelp: "都不滿意？讓 AI 大廚幫你挑",
@@ -71,9 +72,10 @@ const TRANSLATIONS = {
     next: "Next",
     finish: "Done",
     recommendTitle: "What's Nearby",
-    searching: "Searching for delicious food...",
-    expanding: "Expanding search radius",
-    notFound: "No places found matching your criteria.",
+    searching: "AI is picking the best spots...",
+    expanding: "Expanding search area...",
+    fallbackMessage: "Couldn't find perfect matches,\nhere are some good alternatives:",
+    notFound: "No places found even after expanding search.",
     aiThinking: "AI Chef is thinking...",
     aiRetry: "Not happy? Try again",
     aiHelp: "Let AI Chef decide for you",
@@ -207,7 +209,7 @@ type AiSuggestion = {
   dish: string;
   reason: string;
   targetPlace?: Place;
-  keyword?: string; // ★ 新增：AI 給的精確搜尋關鍵字
+  keyword?: string; 
 } | null;
 
 const warm = {
@@ -678,6 +680,7 @@ export default function App() {
 
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [suggestedPlaceIds, setSuggestedPlaceIds] = useState<Set<string>>(new Set());
 
   const [realPlaces, setRealPlaces] = useState<Place[]>([]);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
@@ -760,12 +763,14 @@ export default function App() {
 
       if (rawPlaces.length === 0) {
          if (radius < 5000) {
-             console.log(`[同心圓] ${radius}m 無結果，擴大至 ${radius * 2}m...`);
+             // 擴大搜尋，這裡不設定 setRealPlaces
              searchPlacesWithRipple(radius * 2, retryCount + 1);
              return; 
          } else {
+             // 真的找不到，才顯示錯誤
              setRealPlaces([]);
              setApiError(t.notFound);
+             setIsRealLoading(false); // 確保 loading 結束
              return;
          }
       }
@@ -791,23 +796,43 @@ export default function App() {
            finalIndices = parsed.ids || [];
         } catch (e) {
            console.error("AI 解析失敗", e);
+           // AI 失敗時不應回傳空陣列，而是應該 fallback 到原始資料的前幾筆，或者回傳空讓後續邏輯處理
+           // 這裡我們假設 AI 失敗就回傳空，交給後續的保底邏輯
            finalIndices = [];
         }
 
         const aiSelectedPlaces = rawPlaces.filter((_, index) => finalIndices.includes(index));
         
+        // ★★★ 核心邏輯修正 ★★★
         if (aiSelectedPlaces.length === 0) {
+            // AI 覺得這批都不行
             if (radius < 5000) {
-                console.log(`[AI淘汰] ${radius}m 內無合格店家，擴大至 ${radius * 2}m...`);
+                // 還沒到極限，繼續擴大搜尋
                 searchPlacesWithRipple(radius * 2, retryCount + 1);
                 return;
             } else {
-                setRealPlaces([]); 
-                setApiError(t.notFound);
+                // 已經 5km 了還是 0，觸發「退而求其次」保底機制
+                // 從原始 rawPlaces 挑 3 家最好的 (假設 rawPlaces 已經按距離排過，這裡我們再按評分排一下)
+                const fallbackPlaces = rawPlaces
+                    .sort((a, b) => (b.rating || 0) - (a.rating || 0)) // 按評分高到低
+                    .slice(0, 3);
+                
+                const placesWithDist = fallbackPlaces.map((p) => {
+                    const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
+                    return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
+                });
+                
+                // 再次按距離排
+                placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
+
+                setRealPlaces(placesWithDist);
+                setApiError(t.fallbackMessage); // 顯示「找不到符合條件，但這些不錯」
+                setIsRealLoading(false);
                 return;
             }
         }
 
+        // AI 有挑到，正常顯示
         const placesWithDist = aiSelectedPlaces.map((p) => {
             const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
             return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
@@ -816,21 +841,18 @@ export default function App() {
         placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
         
         setRealPlaces(placesWithDist);
-
+        setIsRealLoading(false);
       }
 
     } catch (err: any) {
       setApiError(`API Error: ${err.message}`);
-    } finally {
-  
+      setIsRealLoading(false);
     }
-  
   };
 
   useEffect(() => {
-    if (realPlaces.length > 0 || apiError) {
-        setIsRealLoading(false);
-    }
+    // 監聽 realPlaces 變化來關閉 loading 也可以，但上面的邏輯已經包含 setIsRealLoading(false)
+    // 這裡保留空依賴，避免重複執行
   }, [realPlaces, apiError]);
 
   useEffect(() => {
@@ -846,6 +868,7 @@ export default function App() {
     setChooseStep(0); setTemp(null); setHunger(null); setBudget(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
     setIsRandomMode(false); 
+    setSuggestedPlaceIds(new Set());
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
@@ -875,6 +898,7 @@ export default function App() {
   function nextChoose() { if (chooseStep < totalChooseSteps - 1) setChooseStep((s) => s + 1); else setScreen("recommend"); }
 
   function randomizeAll() {
+    // ★ 隨機功能也配合新標籤
     setTemp(Math.random() > 0.5 ? "light" : "rich");
     setHunger(Math.random() > 0.5 ? "full" : "snack");
     const rndBudget = Math.random() > 0.5 ? "cheap" : "expensive";
@@ -971,27 +995,26 @@ export default function App() {
         targetPlace = null;
     }
 
-    const userLang = navigator.language;
-    const isChinese = userLang.toLowerCase().includes("zh");
-    const langRule = isChinese 
-        ? "請堅持使用繁體中文 (Traditional Chinese)，絕對禁止出現簡體中文或中國大陸用語。" 
-        : `Please respond in ${userLang}.`;
+    if (targetPlace) {
+        setSuggestedPlaceIds(prev => {
+            const next = new Set(prev);
+            next.add(targetPlace!.id);
+            return next;
+        });
+    }
 
     let prompt = "";
     if (targetPlace) {
         prompt = `使用者想吃：${tags.join(', ')}。
         推薦一家店叫「${targetPlace.name}」。
-        ${langRule}
-        請給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
+        請用繁體中文，給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
         同時請安撫使用者，這家店雖然可能不是完美的 100分，但絕對值得一試。
         格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
     } else {
-        // ★ 關鍵修改：要求 AI 回傳精確的 searchKeyword
         prompt = `使用者想吃：${tags.join(', ')}。
         附近已經沒有其他符合條件的推薦店家的了。
-        ${langRule}
         請給出一個「通用的餐點建議」（例如：不如去便利商店買個關東煮？或是改吃水果？），語氣幽默一點。
-        並且提供一個「精確的搜尋關鍵字 (searchKeyword)」，讓使用者點擊後能在 Google Maps 上搜到結果（例如："便利商店", "水果店", "速食"）。
+        並且提供一個「精確的搜尋關鍵字 (keyword)」，讓使用者點擊後能在 Google Maps 上搜到結果（例如："便利商店", "水果店", "速食"）。
         回傳 JSON 格式：{ "dish": "通用建議標題", "reason": "一句話幽默建議(30字內)", "keyword": "精確搜尋關鍵字" }`;
     }
 
@@ -1142,7 +1165,11 @@ export default function App() {
                       </div>
                     )}
                      
-                    {apiError && <div className="py-8 text-center text-red-400 text-sm">{apiError}</div>}
+                    {apiError && (
+                      <div className="py-8 text-center text-gray-500 text-sm whitespace-pre-line">
+                        {apiError}
+                      </div>
+                    )}
                      
                     {visiblePlaces.map((p) => {
                       return (
@@ -1190,7 +1217,6 @@ export default function App() {
                             </div>
                         )}
                         <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{color: "#6B5D52"}}>{aiSuggestion.reason}</div>
-                        {/* ★ 修正：點擊按鈕時，優先使用 keyword 作為搜尋字串 */}
                         <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.keyword || aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
                       </motion.div>
                     )}
@@ -1276,3 +1302,5 @@ export default function App() {
     </div>
   );
 }
+
+
