@@ -51,7 +51,8 @@ const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count";
 const BACKEND_API_URL = "/api/places"; 
 const BACKEND_GEMINI_URL = "/api/gemini";
 
-type Temp = "hot" | "cold";
+// ★ 邏輯重構：改為 "light/rich" (清淡/重口)
+type Temp = "light" | "rich"; 
 type Hunger = "full" | "snack"; 
 type Speed = "fast" | "sit";
 type Style = "light" | "rich";
@@ -67,6 +68,7 @@ type Place = {
   hunger?: Hunger;
   speed?: Speed;
   price?: "budget" | "mid";
+  priceLevel?: string; // 新增：後端回傳的原始價格等級
   queryKeyword?: string; 
   distance: string; 
   distanceVal?: number;
@@ -178,11 +180,12 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
   return R * c; 
 }
 
+// ★ 修改 2：更新標籤計算邏輯，使用新的文案
 function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }) {
   const { temp, hunger, budget } = args;
   const t: string[] = [];
     
-  if (temp) t.push(temp === "hot" ? "熱食" : "冷食");
+  if (temp) t.push(temp === "light" ? "清淡點" : "重口味"); // 3字 vs 3字
   if (hunger) t.push(hunger === "full" ? "吃飽" : "解饞");
    
   if (budget === "cheap") t.push("隨便吃吃");
@@ -208,13 +211,15 @@ function navigateToMap(url: string) {
   }
 }
 
+// ★ 修改 3：更新搜尋關鍵字邏輯，配合新的 "清淡/重口"
 function buildMapsQuery(tags: string[]) {
   const hour = new Date().getHours();
   const isMorning = hour >= 5 && hour < 11;
   const isAfternoon = hour >= 14 && hour < 17;
   const isLateNight = hour >= 21 || hour < 5;
 
-  const hasCold = tags.includes("冷食");
+  const isLight = tags.includes("清淡點");
+  const isRich = tags.includes("重口味");
   const hasFull = tags.includes("吃飽");
   const hasSnack = tags.includes("解饞");
    
@@ -229,17 +234,41 @@ function buildMapsQuery(tags: string[]) {
 
   let categories: string[] = [];
 
+  // 這裡我們進行「廣泛搜尋」，把過濾交給後端 AI，所以關鍵字要稍微涵蓋多一點
   if (hasFull) {
       if (isMorning) {
           categories.push("早午餐", "飯糰", "鹹粥", "蛋餅", "早餐店");
       } else {
-          categories.push("便當", "丼飯", "拉麵", "牛肉麵", "火鍋", "咖哩", "鐵板燒", "義大利麵", "合菜", "簡餐");
+          // 通用主食
+          let baseFoods = ["便當", "丼飯", "拉麵", "牛肉麵", "火鍋", "咖哩", "鐵板燒", "義大利麵", "合菜", "簡餐"];
+          
+          if (isLight) {
+             // 如果選清淡，加入特定清淡類別，並在後端 AI 過濾時會更嚴格
+             baseFoods.push("清粥小菜", "涼麵", "壽司", "潤餅", "蒸餃", "水煮餐", "健康餐");
+          }
+          if (isRich) {
+             // 如果選重口，加入特定重口類別
+             baseFoods.push("麻辣鍋", "熱炒", "燒肉", "漢堡", "炸雞", "咖哩");
+          }
+
+          categories = baseFoods;
+
           if (isExpensive) categories.push("麻辣鍋", "燒肉", "牛排", "川菜", "異國料理", "私廚");
           if (isCheap) categories.push("自助餐", "炒飯", "陽春麵", "水餃");
       }
   } else if (hasSnack) {
-      categories.push("鹹酥雞", "滷味", "車輪餅", "雞蛋糕", "章魚燒", "蔥油餅", "地瓜球", "炸雞", "串燒");
-      if (hasCold) categories.push("豆花", "剉冰", "手搖飲", "甜點", "蛋糕");
+      // 點心類原本就比較偏重口，但還是可以區分
+      let baseSnacks = ["鹹酥雞", "滷味", "車輪餅", "雞蛋糕", "章魚燒", "蔥油餅", "地瓜球", "炸雞", "串燒"];
+      
+      if (isLight) {
+          baseSnacks.push("豆花", "剉冰", "手搖飲", "甜點", "蛋糕", "水果盤", "沙拉");
+      }
+      if (isRich) {
+          baseSnacks.push("碳烤", "東山鴨頭", "臭豆腐", "排骨酥");
+      }
+      
+      categories = baseSnacks;
+
       if (isAfternoon) categories.push("下午茶", "鬆餅", "咖啡廳", "麵包店");
       if (isLateNight) categories.push("宵夜", "永和豆漿", "鹽水雞", "串燒");
   } else {
@@ -464,7 +493,7 @@ function TopBar({
   
   const btnClassName = "flex items-center justify-center w-10 h-10 rounded-xl backdrop-blur-md shadow-sm active:scale-95 transition-all";
   
-  // ★ 修改 1：按鈕樣式優化，邊框和圖標改為品牌橘色
+  // ★ 按鈕樣式優化，邊框和圖標改為品牌橘色
   const btnCustomStyle = {
       background: "rgba(255, 255, 255, 0.4)",
       borderColor: "rgba(255, 138, 61, 0.35)", // 加深一點的橘色邊框
@@ -517,8 +546,9 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   const jitter = mode === "chaos" ? 6 : 0;
     
   const palette = useMemo(() => {
-    if (temp === "hot") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," };
-    if (temp === "cold") return { a: "rgba(255, 160, 130, ", b: "rgba(240, 248, 255, ", ring: "rgba(176, 224, 230, 0.5)", glowColor: "rgba(255, 180, 160," };
+    // 配合 "light/rich" 更新視覺
+    if (temp === "rich") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," }; // 重口味用紅色系
+    if (temp === "light") return { a: "rgba(255, 160, 130, ", b: "rgba(240, 248, 255, ", ring: "rgba(176, 224, 230, 0.5)", glowColor: "rgba(255, 180, 160," }; // 清淡用淺色系
     return { a: "rgba(255, 138, 61, ", b: "rgba(255, 211, 106, ", ring: "rgba(255, 138, 61, 0.28)", glowColor: "rgba(255, 138, 61," };
   }, [temp]);
 
@@ -579,6 +609,7 @@ export default function App() {
   const [chooseStep, setChooseStep] = useState(0);
   const totalChooseSteps = 3;
 
+  // ★ 新邏輯：清淡(light) / 重口(rich)
   const [temp, setTemp] = useState<Temp | null>(null);
   const [hunger, setHunger] = useState<Hunger | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
@@ -622,6 +653,8 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  // 新增狀態：記錄目前搜尋半徑，從 1000 (1km) 開始
+  const [searchRadius, setSearchRadius] = useState(1000); 
     
   const derived = useMemo(() => computeTags({ temp, hunger, budget }), [temp, hunger, budget]);
   const tags = derived.tags;
@@ -641,59 +674,98 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    if (screen === "recommend" && userLocation) {
-      if (!BACKEND_API_URL) return;
-      setIsRealLoading(true);
-      setApiError(null);
-        
-      const payload = { 
-        lat: userLocation.lat, 
-        lng: userLocation.lng, 
-        query: mapsQuery,
-        language: navigator.language 
-      };
+  // ★ 核心邏輯：執行搜尋與 AI 過濾
+  const searchPlacesWithRipple = async (radius: number, retryCount = 0) => {
+    if (!userLocation || !BACKEND_API_URL || !BACKEND_GEMINI_URL) return;
+    
+    setIsRealLoading(true);
+    setApiError(null);
 
-      fetch(BACKEND_API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
-      .then(async res => {
-        if (!res.ok) throw new Error(await res.text());
-        return res.json();
-      })
-      .then(data => {
-        if (Array.isArray(data)) {
-          const placesWithDist = data.map((p: any) => {
-             const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat, p.lng);
-             return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
-          });
-          setRealPlaces(placesWithDist);
+    try {
+      // 1. 同心圓搜尋：向 Google 要資料 (radius 動態)
+      const placesRes = await fetch(BACKEND_API_URL, { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify({ 
+          lat: userLocation.lat, 
+          lng: userLocation.lng, 
+          query: mapsQuery,
+          language: navigator.language,
+          radius: radius // 傳入半徑
+        }) 
+      });
+
+      if (!placesRes.ok) throw new Error(await placesRes.text());
+      const rawPlaces: Place[] = await placesRes.json();
+
+      // 2. 自動擴大機制：如果沒資料，且還沒擴展到極限 (例如 5km)，就擴大並重試
+      if (rawPlaces.length === 0 && radius < 5000) {
+         console.log(`範圍 ${radius}m 找不到，擴大搜尋至 ${radius * 2}m...`);
+         setSearchRadius(radius * 2);
+         // 遞迴呼叫自己
+         searchPlacesWithRipple(radius * 2, retryCount + 1);
+         return; // 結束這一輪，讓遞迴處理
+      }
+
+      // 3. AI 過濾機制 (毒舌評審)
+      if (rawPlaces.length > 0) {
+        // 呼叫 Gemini 進行過濾
+        const filterRes = await fetch(BACKEND_GEMINI_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            mode: "filter", // 告訴後端這是過濾模式
+            candidates: rawPlaces,
+            userTags: tags,
+            language: navigator.language // ★ 傳送語言參數，確保 AI 說對話
+          }) 
+        });
+
+        const filterData = await filterRes.json();
+        // 解析 AI 回傳的 IDs (格式: { ids: [0, 5, 8] })
+        let finalIndices = [];
+        try {
+           const jsonText = filterData.candidates?.[0]?.content?.parts?.[0]?.text;
+           const parsed = JSON.parse(jsonText.replace(/```json/g, "").replace(/```/g, ""));
+           finalIndices = parsed.ids || [];
+        } catch (e) {
+           console.error("AI 解析失敗，使用原始排序", e);
+           finalIndices = [0, 1, 2]; // 降級處理
         }
-      })
-      .catch(err => setApiError(`API Error: ${err.message}`))
-      .finally(() => setIsRealLoading(false));
+
+        // 根據 AI 挑的 ID 篩選出最終名單
+        const aiSelectedPlaces = rawPlaces.filter((_, index) => finalIndices.includes(index));
+        
+        // 如果 AI 殺太兇導致沒剩幾家，就補幾家原始的高分店
+        const finalPlaces = aiSelectedPlaces.length > 0 ? aiSelectedPlaces : rawPlaces.slice(0, 3);
+
+        const placesWithDist = finalPlaces.map((p) => {
+            const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
+            return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
+        });
+        
+        setRealPlaces(placesWithDist);
+      } else {
+        setRealPlaces([]); // 真的找不到
+        setApiError("附近真的太荒涼了，找不到餐廳 QQ");
+      }
+
+    } catch (err: any) {
+      setApiError(`API Error: ${err.message}`);
+    } finally {
+      setIsRealLoading(false);
     }
-  }, [screen, userLocation, mapsQuery, temp, hunger, budget, style, speed]);
+  };
 
-  const filteredPlaces = useMemo(() => {
-    if (!BACKEND_API_URL || realPlaces.length === 0) return [];
-     
-    const scored = realPlaces.map(p => {
-      let score = 0;
-      if (p.type === temp) score += 4; 
-      if (p.style === style) score += 3;
-      if (p.hunger === hunger) score += 2;
-      if (p.speed === speed) score += 1;
-      return { place: p, score: score };
-    });
-     
-    const candidates = scored.filter(s => s.score >= 2); 
-    const finalPool = candidates.length > 0 ? candidates : scored;
-     
-    finalPool.sort((a, b) => (a.place.distanceVal ?? 9999) - (b.place.distanceVal ?? 9999));
-     
-    return finalPool.slice(0, 20).map(s => s.place);
-  }, [temp, hunger, speed, style, realPlaces]);
+  useEffect(() => {
+    // 當進入推薦頁面時，觸發同心圓搜尋
+    if (screen === "recommend" && userLocation) {
+        setSearchRadius(1000); // 重置半徑
+        searchPlacesWithRipple(1000);
+    }
+  }, [screen, userLocation, mapsQuery]); // 移除其他依賴，避免重複觸發
 
-  const visiblePlaces = useMemo(() => filteredPlaces.slice(0, VISIBLE_COUNT), [filteredPlaces]);
+  const visiblePlaces = useMemo(() => realPlaces.slice(0, VISIBLE_COUNT), [realPlaces]);
 
   function resetFlow() {
     setChooseStep(0); setTemp(null); setHunger(null); setBudget(null); setRichness(0.5); setSpeed(null);
@@ -729,7 +801,8 @@ export default function App() {
   function nextChoose() { if (chooseStep < totalChooseSteps - 1) setChooseStep((s) => s + 1); else setScreen("recommend"); }
 
   function randomizeAll() {
-    setTemp(Math.random() > 0.5 ? "hot" : "cold");
+    // ★ 隨機功能也配合新標籤
+    setTemp(Math.random() > 0.5 ? "light" : "rich");
     setHunger(Math.random() > 0.5 ? "full" : "snack");
     const rndBudget = Math.random() > 0.5 ? "cheap" : "expensive";
     setBudget(rndBudget);
@@ -841,6 +914,7 @@ export default function App() {
         prompt = `使用者想吃：${tags.join(', ')}。
         推薦一家店叫「${targetPlace.name}」。
         請用繁體中文，給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
+        同時請安撫使用者，這家店雖然可能不是完美的 100分，但絕對值得一試。
         格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
     } else {
         prompt = `使用者想吃：${tags.join(', ')}。
@@ -852,7 +926,11 @@ export default function App() {
       const response = await fetch(BACKEND_GEMINI_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt })
+        body: JSON.stringify({ 
+            mode: "suggestion", // 這是大廚建議模式
+            prompt: prompt,
+            language: navigator.language // ★ 傳送語言參數
+        })
       });
       const data = await response.json();
         
@@ -954,8 +1032,9 @@ export default function App() {
                   <div className="mt-8 space-y-4">
                     {chooseStep === 0 && (
                       <>
-                        <PillButton active={temp === "hot"} onClick={() => setTemp("hot")}>熱的</PillButton>
-                        <PillButton active={temp === "cold"} onClick={() => setTemp("cold")}>冷的</PillButton>
+                        {/* ★ 修改 3：按鈕文案改為「清淡點」与「重口味」，3字 vs 3字，對稱 */}
+                        <PillButton active={temp === "light"} onClick={() => setTemp("light")}>清淡點</PillButton>
+                        <PillButton active={temp === "rich"} onClick={() => setTemp("rich")}>重口味</PillButton>
                         <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!temp}>下一步</PrimaryButton></div>
                       </>
                     )}
@@ -988,7 +1067,8 @@ export default function App() {
                   <div className="mt-4 space-y-4">
                     {isRealLoading && (
                       <div className="py-8 text-center text-gray-400 animate-pulse text-sm">
-                          正在搜尋附近的美味...
+                          正在搜尋附近的美味...<br/>
+                          {searchRadius > 1000 && <span className="text-xs text-orange-400">(擴大搜尋範圍中: {searchRadius}m)</span>}
                       </div>
                     )}
                      
