@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
+import { LucideUtensils, LucideMapPin, LucideChefHat, LucideRotateCcw, LucideTrash2, LucidePin, LucideArrowRight, LucideHome, LucideX, LucideHistory, LucideChevronLeft } from "lucide-react";
 
 const LS_KEY = "whatnow_energy_log_v2"; 
 const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; 
@@ -11,6 +12,7 @@ type Temp = "hot" | "cold";
 type Hunger = "full" | "snack"; 
 type Speed = "fast" | "sit";
 type Style = "light" | "rich";
+type Budget = "cheap" | "expensive"; // 新增預算類型
 
 type Screen = "home" | "choose" | "recommend" | "energy" | "log";
 
@@ -133,22 +135,19 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
   return R * c; 
 }
 
-function computeTags(args: { temp: Temp | null; hunger: Hunger | null; richness: number; speed: Speed | null }) {
-  const { temp, hunger, richness, speed } = args;
-  const style: Style = richness >= 0.55 ? "rich" : "light";
+// 修改標籤邏輯，嚴格限制為3個標籤
+function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }) {
+  const { temp, hunger, budget } = args;
   const t: string[] = [];
-  
+   
   if (temp) t.push(temp === "hot" ? "熱食" : "冷食");
   if (hunger) t.push(hunger === "full" ? "吃飽" : "解饞");
-  t.push(style === "rich" ? "重口" : "清爽");
-  if (speed) t.push(speed === "fast" ? "快點" : "坐下來吃");
-  return { tags: t, style };
-}
+  
+  // 嚴格對應預算按鈕，只給一個標籤
+  if (budget === "cheap") t.push("隨便吃吃");
+  if (budget === "expensive") t.push("犒賞自己");
 
-function preferenceText(richness: number) {
-  if (richness < 0.4) return "清爽一點";
-  if (richness > 0.6) return "重口一點";
-  return "都可以";
+  return { tags: t };
 }
 
 function getGoogleMapsUrl(query: string, placeId?: string) {
@@ -168,6 +167,7 @@ function navigateToMap(url: string) {
   }
 }
 
+// 修改搜尋邏輯，配合新的標籤文字
 function buildMapsQuery(tags: string[]) {
   const hour = new Date().getHours();
   const isMorning = hour >= 5 && hour < 11;
@@ -177,12 +177,17 @@ function buildMapsQuery(tags: string[]) {
   const hasCold = tags.includes("冷食");
   const hasFull = tags.includes("吃飽");
   const hasSnack = tags.includes("解饞");
-  const hasRich = tags.includes("重口");
-  const hasLight = tags.includes("清爽");
-  const hasFast = tags.includes("快點");
-  const hasSit = tags.includes("坐下來吃");
+  
+  // 判斷預算 (注意：這裡必須對應 computeTags 產出的標籤文字)
+  const isCheap = tags.includes("隨便吃吃");
+  const isExpensive = tags.includes("犒賞自己");
 
-  const prefixes = ["人氣", "在地", "必吃", "評價高", "隱藏版", "老字號", "平價", "排隊", "道地", "TOP"];
+  const prefixes = ["人氣", "在地", "必吃", "評價高", "隱藏版", "老字號", "排隊", "道地", "TOP"];
+  // 如果是平價，加入平價關鍵字
+  if (isCheap) prefixes.push("平價", "銅板美食", "高CP值", "便宜");
+  // 如果是精緻，加入高級關鍵字
+  if (isExpensive) prefixes.push("精緻", "高級", "氣氛好", "聚餐");
+
   const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
 
   let categories: string[] = [];
@@ -192,8 +197,8 @@ function buildMapsQuery(tags: string[]) {
           categories.push("早午餐", "飯糰", "鹹粥", "蛋餅", "早餐店");
       } else {
           categories.push("便當", "丼飯", "拉麵", "牛肉麵", "火鍋", "咖哩", "鐵板燒", "義大利麵", "合菜", "簡餐");
-          if (hasRich) categories.push("麻辣鍋", "燒肉", "熱炒", "川菜", "韓式料理", "泰式料理");
-          if (hasLight) categories.push("健康餐盒", "壽司", "越南河粉", "烏龍麵", "素食", "定食");
+          if (isExpensive) categories.push("麻辣鍋", "燒肉", "牛排", "川菜", "異國料理", "私廚");
+          if (isCheap) categories.push("自助餐", "炒飯", "陽春麵", "水餃");
       }
   } else if (hasSnack) {
       categories.push("鹹酥雞", "滷味", "車輪餅", "雞蛋糕", "章魚燒", "蔥油餅", "地瓜球", "炸雞", "串燒");
@@ -204,10 +209,9 @@ function buildMapsQuery(tags: string[]) {
       categories = ["美食", "小吃", "餐廳"];
   }
 
-  if (categories.length < 3) {
-      if (hasCold) categories.push("涼麵", "沙拉", "生魚片", "壽司");
-      if (hasSit) categories.push("餐廳", "居酒屋", "餐酒館");
-      if (hasFast) categories.push("小吃", "速食");
+  // 根據預算稍微調整類別
+  if (isExpensive && categories.length < 5) {
+      categories.push("居酒屋", "餐酒館", "日本料理");
   }
 
   const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
@@ -273,19 +277,13 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
         style={{ background }}
       >
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
-           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-             <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
-           </svg>
+           <LucidePin size={20} fill="currentColor" stroke="none" />
            <span className="font-bold text-sm">釘選</span>
         </div>
 
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
            <span className="font-bold text-sm">刪除</span>
-           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-             <path d="M3 6h18"></path>
-             <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-             <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-           </svg>
+           <LucideTrash2 size={20} />
         </div>
       </motion.div>
 
@@ -328,9 +326,7 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
             <div className="flex justify-between items-center mb-1">
                 <div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>
                 {item.isPinned && (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={warm.orange} stroke="none">
-                        <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
-                    </svg>
+                    <LucidePin size={14} fill={warm.orange} stroke="none" />
                 )}
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
@@ -411,45 +407,63 @@ function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longP
   );
 }
 
-function TopBar({ title, onBack, onOpenLog, showBack, showLog }: { title: string; onBack: () => void; onOpenLog: () => void; showBack: boolean; showLog: boolean; }) {
+// 修改 TopBar 以支持 Icon 和不同的按鈕邏輯
+function TopBar({ 
+  screen, 
+  isRandomMode, 
+  onBack, 
+  onGoHome, 
+  onOpenLog, 
+  hasLog, 
+  title 
+}: { 
+  screen: Screen;
+  isRandomMode: boolean;
+  onBack: () => void;
+  onGoHome: () => void;
+  onOpenLog: () => void;
+  hasLog: boolean;
+  title: string;
+}) {
+  
+  // 統一的按鈕樣式：圓角矩形 (rounded-xl) + 毛玻璃
+  const btnStyle = "flex items-center justify-center w-10 h-10 rounded-xl bg-white/40 backdrop-blur-md border border-[rgba(255,138,61,0.18)] text-[#595048] shadow-sm active:scale-95 transition-all";
+
+  let leftBtn = null;
+  let rightBtn = null;
+
+  if (screen === 'home') {
+     // 首頁：左邊空，右邊歷史 (如果有的話)
+     if (hasLog) {
+         rightBtn = <button onClick={onOpenLog} className={btnStyle}><LucideHistory size={20} /></button>;
+     }
+  } else if (screen === 'choose') {
+     // 選擇頁：左邊返回，右邊關閉(回首頁)
+     leftBtn = <button onClick={onBack} className={btnStyle}><LucideChevronLeft size={24} /></button>;
+     rightBtn = <button onClick={onGoHome} className={btnStyle}><LucideX size={22} /></button>;
+  } else if (screen === 'recommend') {
+     if (isRandomMode) {
+         // 隨機模式結果：左邊回首頁 (House)，右邊歷史 (可選，保持一致性)
+         leftBtn = <button onClick={onGoHome} className={btnStyle}><LucideHome size={20} /></button>;
+         // 右邊目前留空，專注於結果
+     } else {
+         // 一般模式結果：左邊返回修改，右邊關閉(回首頁)
+         leftBtn = <button onClick={onBack} className={btnStyle}><LucideChevronLeft size={24} /></button>;
+         rightBtn = <button onClick={onGoHome} className={btnStyle}><LucideX size={22} /></button>;
+     }
+  } else if (screen === 'energy') {
+      // 紀錄完成頁：左邊回首頁
+       leftBtn = <button onClick={onGoHome} className={btnStyle}><LucideHome size={20} /></button>;
+  } else if (screen === 'log') {
+      // 歷史紀錄頁：左邊返回 (回首頁)
+      leftBtn = <button onClick={onBack} className={btnStyle}><LucideChevronLeft size={24} /></button>;
+  }
+
   return (
-    <div className="flex items-center justify-between gap-3 px-4 pt-6 pb-4">
-      <button 
-        className={`rounded-xl px-3 py-2 text-sm transition-all active:scale-95 ${showBack ? "opacity-100" : "opacity-0 pointer-events-none"}`} 
-        onClick={onBack} 
-        style={{ 
-            border: warm.borderSubtle,
-            background: "rgba(255,255,255,0.4)", 
-            backdropFilter: "blur(8px)",
-            color: warm.text, 
-            fontWeight: 500,
-            boxShadow: "0 2px 8px rgba(255, 138, 61, 0.05)"
-        }}
-      >
-        ← 返回
-      </button>
-      
-      <div className="text-sm font-bold" style={{ color: warm.sub, letterSpacing: "0.05em" }}>{title}</div>
-      
-      {showLog ? (
-        <button 
-          className="rounded-xl px-3 py-2 text-sm transition-all active:scale-95" 
-          onClick={onOpenLog} 
-          style={{ 
-              border: warm.borderSubtle, 
-              background: "rgba(255,255,255,0.4)", 
-              backdropFilter: "blur(8px)",
-              color: warm.text, 
-              fontWeight: 500, 
-              letterSpacing: "0.02em",
-              boxShadow: "0 2px 8px rgba(255, 138, 61, 0.05)"
-          }}
-        >
-          回顧食力
-        </button>
-      ) : (
-        <div className="px-3 py-2 text-sm opacity-0 pointer-events-none">回顧食力</div>
-      )}
+    <div className="flex items-center justify-between gap-3 px-4 pt-6 pb-4 relative z-50">
+       <div className="w-10">{leftBtn}</div>
+       <div className="text-sm font-bold" style={{ color: warm.sub, letterSpacing: "0.05em" }}>{title}</div>
+       <div className="w-10 flex justify-end">{rightBtn}</div>
     </div>
   );
 }
@@ -458,7 +472,7 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
   const jitter = mode === "chaos" ? 6 : 0;
-  
+   
   const palette = useMemo(() => {
     if (temp === "hot") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," };
     if (temp === "cold") return { a: "rgba(255, 160, 130, ", b: "rgba(240, 248, 255, ", ring: "rgba(176, 224, 230, 0.5)", glowColor: "rgba(255, 180, 160," };
@@ -474,9 +488,9 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   return (
     <div className="relative flex flex-col items-center justify-center">
         <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-          
+           
           <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
-          
+           
             <motion.div 
                 key="core-shape"
                 className="absolute inset-6 rounded-[42%]" 
@@ -491,18 +505,27 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
                 transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} 
                 style={{ background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} 
             />
-          
+           
           <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
         </div>
     </div>
   );
 }
 
-function ProgressDots({ step, total }: { step: number; total: number }) {
+// 修改 ProgressDots 允許點擊回溯
+function ProgressDots({ step, total, onStepClick }: { step: number; total: number; onStepClick: (idx: number) => void }) {
   return (
     <div className="flex items-center justify-center gap-2 mt-4">
       {Array.from({ length: total }).map((_, i) => (
-        <div key={i} className="h-2 w-2 rounded-full" style={{ background: i === step ? warm.orange : "rgba(255, 138, 61, 0.15)", transform: i === step ? "scale(1.25)" : "scale(1)", transition: "all 220ms ease" }} />
+        <div 
+            key={i} 
+            onClick={() => { if(i <= step) onStepClick(i); }}
+            className={`h-2 w-2 rounded-full transition-all duration-200 ${i <= step ? 'cursor-pointer' : ''}`}
+            style={{ 
+                background: i === step ? warm.orange : "rgba(255, 138, 61, 0.15)", 
+                transform: i === step ? "scale(1.25)" : "scale(1)",
+            }} 
+        />
       ))}
     </div>
   );
@@ -516,12 +539,14 @@ export default function App() {
 
   const [temp, setTemp] = useState<Temp | null>(null);
   const [hunger, setHunger] = useState<Hunger | null>(null);
-  const [richness, setRichness] = useState(0.5);
-  const [speed, setSpeed] = useState<Speed | null>(null);
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const [richness, setRichness] = useState(0.5); // 仍保留此狀態供視覺 Core 使用
+  const [speed, setSpeed] = useState<Speed | null>(null); // 保留但由 budget 隱性控制
 
   const pressTimer = useRef<number | null>(null);
   const [pressing, setPressing] = useState(false);
-  
+  const [isRandomizing, setIsRandomizing] = useState(false); // 新增隨機洗牌動畫狀態
+   
   const [isRandomMode, setIsRandomMode] = useState(false);
 
   const MAX_TEASE_COUNT = 3;
@@ -555,10 +580,11 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isRealLoading, setIsRealLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  
-  const derived = useMemo(() => computeTags({ temp, hunger, richness, speed }), [temp, hunger, richness, speed]);
+   
+  const derived = useMemo(() => computeTags({ temp, hunger, budget }), [temp, hunger, budget]);
   const tags = derived.tags;
-  const style = derived.style;
+  // const style = derived.style; // 不再從 computeTags 直接獲取，改用 budget 對應
+  const style: Style = budget === "expensive" ? "rich" : "light";
   const mapsQuery = useMemo(() => buildMapsQuery(tags), [tags]);
 
   const groupedLogs = useMemo(() => groupLogsByDate(log), [log]);
@@ -579,7 +605,7 @@ export default function App() {
       if (!BACKEND_API_URL) return;
       setIsRealLoading(true);
       setApiError(null);
-      
+       
       const payload = { 
         lat: userLocation.lat, 
         lng: userLocation.lng, 
@@ -604,7 +630,7 @@ export default function App() {
       .catch(err => setApiError(`API Error: ${err.message}`))
       .finally(() => setIsRealLoading(false));
     }
-  }, [screen, userLocation, mapsQuery, temp, hunger, richness, speed]);
+  }, [screen, userLocation, mapsQuery, temp, hunger, budget, style, speed]);
 
   const filteredPlaces = useMemo(() => {
     if (!BACKEND_API_URL || realPlaces.length === 0) return [];
@@ -629,7 +655,7 @@ export default function App() {
   const visiblePlaces = useMemo(() => filteredPlaces.slice(0, VISIBLE_COUNT), [filteredPlaces]);
 
   function resetFlow() {
-    setChooseStep(0); setTemp(null); setHunger(null); setRichness(0.5); setSpeed(null);
+    setChooseStep(0); setTemp(null); setHunger(null); setBudget(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
     setIsRandomMode(false); 
     setSuggestedPlaceIds(new Set());
@@ -658,29 +684,50 @@ export default function App() {
       setIsRandomMode(false); 
       setScreen("choose"); 
   }
-  
+   
   function nextChoose() { if (chooseStep < totalChooseSteps - 1) setChooseStep((s) => s + 1); else setScreen("recommend"); }
 
   function randomizeAll() {
     setTemp(Math.random() > 0.5 ? "hot" : "cold");
     setHunger(Math.random() > 0.5 ? "full" : "snack");
-    setSpeed(Math.random() > 0.5 ? "fast" : "sit");
-    setRichness(Math.random());
+    // 隨機預算，這也會連動影響 richness 和 speed
+    const rndBudget = Math.random() > 0.5 ? "cheap" : "expensive";
+    setBudget(rndBudget);
+    if (rndBudget === "cheap") {
+        setRichness(0.3);
+        setSpeed("fast");
+    } else {
+        setRichness(0.8);
+        setSpeed("sit");
+    }
   }
 
-  function handlePressDown() {
-    setPressing(true);
-    if (pressTimer.current) window.clearTimeout(pressTimer.current);
-    pressTimer.current = window.setTimeout(() => { 
-        randomizeAll(); 
-        setPressing(false); 
-        pressTimer.current = null; 
-        setIsRandomMode(true); 
-        setScreen("recommend"); 
-    }, 650);
+  // 新增：隨機按鈕點擊處理 (取代原本的長按邏輯)
+  function handleRandomClick() {
+      setIsRandomizing(true);
+      // 0.6秒的過場動畫時間
+      setTimeout(() => {
+          randomizeAll();
+          setIsRandomizing(false);
+          setIsRandomMode(true);
+          setScreen("recommend");
+      }, 600);
   }
 
-  function handlePressUp() { setPressing(false); if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; } }
+  // 處理預算選擇
+  function handleBudgetSelect(b: Budget) {
+      setBudget(b);
+      // 連動設定視覺效果與潛在屬性
+      if (b === "cheap") {
+          setRichness(0.3);
+          setSpeed("fast");
+      } else {
+          setRichness(0.8);
+          setSpeed("sit");
+      }
+  }
+
+  // 移除舊的長按相關函式 handlePressDown, handlePressUp
 
   function saveEnergy(choiceText: string, isCategory: boolean = false) {
     const entry: LogEntry = {
@@ -774,7 +821,7 @@ export default function App() {
         body: JSON.stringify({ prompt: prompt })
       });
       const data = await response.json();
-      
+       
       let suggestion = null;
       if (data.dish) {
           suggestion = data;
@@ -808,18 +855,20 @@ export default function App() {
   }
 
   const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" } as const;
-  
+   
   const showBack = screen !== "home" && screen !== "energy" && screen !== "log"; 
 
   return (
     <div className="min-h-screen w-full flex items-start justify-center px-3" style={{ background: warm.bg, color: warm.text }}>
       <div className="w-full max-w-[420px] pb-10">
         <TopBar 
-            title={subtleTitle()} 
+            screen={screen}
+            isRandomMode={isRandomMode}
             onBack={goBack} 
+            onGoHome={goHome}
             onOpenLog={() => setScreen("log")} 
-            showBack={showBack} 
-            showLog={log.length > 0 && screen !== "energy" && screen !== "log"} 
+            hasLog={log.length > 0}
+            title={subtleTitle()} 
         />
         <div className="px-4 pt-4">
           <div className="rounded-[28px] overflow-hidden relative backdrop-blur-md" style={{ ...card, background: screen === "energy" || screen === "home" ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.72)" }}>
@@ -841,10 +890,21 @@ export default function App() {
                   )}
                   <div className="mt-12"><PrimaryButton onClick={startDecision}>開始覓食</PrimaryButton></div>
                   <div className="mt-6">
-                    <button onMouseDown={handlePressDown} onMouseUp={handlePressUp} onMouseLeave={handlePressUp} onTouchStart={handlePressDown} onTouchEnd={handlePressUp} className="w-full rounded-2xl px-4 py-4 transition overflow-hidden relative" style={{ border: warm.border, background: pressing ? "linear-gradient(135deg, rgba(255,138,61,0.18) 0%, rgba(255,211,106,0.22) 100%)" : "rgba(255,255,255,0.75)", boxShadow: pressing ? warm.shadowActive : warm.shadow }}>
-                      <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>沒想法</div>
-                      <div className="relative z-10 mt-1 text-sm" style={{ color: warm.sub, textAlign: "center" }}>長按一下，隨緣覓食</div>
-                        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
+                    <button 
+                        onClick={handleRandomClick}
+                        className="w-full rounded-2xl px-4 py-4 transition overflow-hidden relative" 
+                        style={{ border: warm.border, background: isRandomizing ? "linear-gradient(135deg, rgba(255,138,61,0.18) 0%, rgba(255,211,106,0.22) 100%)" : "rgba(255,255,255,0.75)", boxShadow: isRandomizing ? warm.shadowActive : warm.shadow }}
+                    >
+                      {isRandomizing ? (
+                          <div className="relative z-10 flex flex-col items-center justify-center h-full">
+                              <span className="animate-pulse text-base font-bold" style={{color: warm.orange}}>隨緣覓食中...</span>
+                          </div>
+                      ) : (
+                          <>
+                              <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>沒想法</div>
+                              <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
+                          </>
+                      )}
                     </button>
                   </div>
                 </motion.div>
@@ -853,7 +913,7 @@ export default function App() {
               {screen === "choose" && (
                 <motion.div key="choose" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
                   <div className="text-xl mt-4" style={{ fontWeight: 700, letterSpacing: "0.02em", textAlign: "center" }}>做個輕鬆的選擇</div>
-                  <ProgressDots step={chooseStep} total={totalChooseSteps} />
+                  <ProgressDots step={chooseStep} total={totalChooseSteps} onStepClick={setChooseStep} />
                   <div className="mt-8 space-y-4">
                     {chooseStep === 0 && (
                       <>
@@ -871,36 +931,9 @@ export default function App() {
                     )}
                     {chooseStep === 2 && (
                       <>
-                        <div className="mt-2 rounded-2xl p-5" style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.5)" }}>
-                          <div className="flex items-center justify-between"><span className="text-xs" style={{ color: warm.sub }}>清爽</span><span className="text-xs" style={{ color: warm.sub }}>重口</span></div>
-                          <div className="relative w-full h-6 mt-4 mb-2 flex items-center">
-                            <div className="absolute w-full h-2 rounded-full overflow-hidden" style={{ background: "linear-gradient(90deg, #FAD961 0%, #F76B1C 100%)", opacity: 0.3 }}></div>
-                            <input 
-                              type="range" 
-                              min={0} 
-                              max={1} 
-                              step={0.01} 
-                              value={richness} 
-                              onChange={(e) => setRichness(parseFloat(e.target.value))} 
-                              className="w-full absolute z-10 opacity-0 cursor-pointer h-full"
-                            />
-                            <div 
-                              className="absolute h-5 w-5 rounded-full shadow-md pointer-events-none" 
-                              style={{ 
-                                left: `calc(${richness * 100}% - 10px)`, 
-                                background: `linear-gradient(135deg, ${warm.yellow} 0%, ${warm.orange} 100%)`,
-                                border: "2px solid white",
-                                boxShadow: "0 2px 6px rgba(0,0,0,0.15)"
-                              }}
-                            />
-                          </div>
-                          <div className="mt-2 text-sm" style={{ color: warm.sub, textAlign: "center" }}>現在偏好：{preferenceText(richness)}</div>
-                          <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button onClick={() => setSpeed("fast")} className="rounded-2xl px-3 py-3 text-sm transition-all overflow-hidden relative" style={{ border: `1px solid ${speed === "fast" ? "rgba(255,138,61,0.5)" : "rgba(255, 138, 61, 0.18)"}`, background: speed === "fast" ? "#FFF8F3" : "rgba(255,255,255,0.6)", fontWeight: 500, color: warm.text, textAlign: "center", boxShadow: speed === "fast" ? "inset 0 1px 4px rgba(255,138,61,0.1)" : "none" }}>快點</button>
-                            <button onClick={() => setSpeed("sit")} className="rounded-2xl px-3 py-3 text-sm transition-all overflow-hidden relative" style={{ border: `1px solid ${speed === "sit" ? "rgba(255,138,61,0.5)" : "rgba(255, 138, 61, 0.18)"}`, background: speed === "sit" ? "#FFF8F3" : "rgba(255,255,255,0.6)", fontWeight: 500, color: warm.text, textAlign: "center", boxShadow: speed === "sit" ? "inset 0 1px 4px rgba(255,138,61,0.1)" : "none" }}>坐下來吃</button>
-                          </div>
-                        </div>
-                        <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!speed}>完成</PrimaryButton></div>
+                        <PillButton active={budget === "cheap"} onClick={() => handleBudgetSelect("cheap")}>隨便吃吃</PillButton>
+                        <PillButton active={budget === "expensive"} onClick={() => handleBudgetSelect("expensive")}>犒賞自己</PillButton>
+                        <div className="pt-4"><PrimaryButton onClick={nextChoose} disabled={!budget}>完成</PrimaryButton></div>
                       </>
                     )}
                   </div>
@@ -914,7 +947,7 @@ export default function App() {
                     <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} />
                     <div className="mt-4 flex flex-wrap gap-2 justify-center">{tags.map((t) => (<Tag key={t}>{t}</Tag>))}</div>
                   </div>
-                  
+                   
                   <div className="mt-4 space-y-4">
                     {isRealLoading && (
                       <div className="py-8 text-center text-gray-400 animate-pulse text-sm">
@@ -952,7 +985,7 @@ export default function App() {
                         {isAiLoading ? (
                           <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl">✨</span><span className="font-bold text-sm">AI 大廚正在思考...</span></div>
                         ) : aiSuggestion ? (
-                           <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>↻</span> 還是不滿意？再試一次</div>
+                            <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>↻</span> 還是不滿意？再試一次</div>
                         ) : (
                           <>
                             <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>✨</span> 都不滿意？讓 AI 大廚幫你挑</div>
@@ -1005,15 +1038,11 @@ export default function App() {
                         disabled={log.length === 0}
                         title="清空本機紀錄"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M3 6h18"></path>
-                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                        </svg>
+                        <LucideTrash2 size={18} />
                     </button>
                   </div>
                   <div className="flex-1 overflow-y-auto relative px-6">
-                    <div className="pt-4 pb-44 space-y-3">
+                    <div className="pt-4 pb-6 space-y-3">
                       {groupedLogs.length === 0 ? (
                         <div className="rounded-2xl p-6 mt-4 text-center" style={{ border: "1px dashed rgba(255,138,61,0.3)", background: "rgba(255,211,106,0.08)" }}>
                           <div className="text-base font-bold" style={{color: warm.text}}>還沒有食力</div><div className="mt-2 text-sm text-gray-500">這裡會記錄你所有的覓食歷程</div>
@@ -1023,18 +1052,10 @@ export default function App() {
                           <div key={group.title} className="mb-6">
                             <div className="flex items-center gap-2 mb-2 ml-1">
                                 {group.type === 'pinned' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <line x1="12" y1="17" x2="12" y2="22"></line>
-                                      <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
-                                    </svg>
+                                    <LucidePin size={16} stroke={warm.orange} />
                                 )}
                                 {group.type === 'date' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={warm.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                      <line x1="16" y1="2" x2="16" y2="6"></line>
-                                      <line x1="8" y1="2" x2="8" y2="6"></line>
-                                      <line x1="3" y1="10" x2="21" y2="10"></line>
-                                    </svg>
+                                    <LucideRotateCcw size={16} stroke={warm.orange} />
                                 )}
                                 <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
@@ -1056,9 +1077,6 @@ export default function App() {
                         ))
                       )}
                     </div>
-                  </div>
-                  <div className="absolute bottom-0 left-0 w-full px-6 pb-10 pt-12 space-y-5 pointer-events-none" style={{ background: "linear-gradient(to top, #FAF9F6 70%, rgba(250, 249, 246, 0.8) 85%, transparent 100%)" }}>
-                    <div className="pointer-events-auto space-y-5"><PrimaryButton onClick={goHome}>回首頁</PrimaryButton></div>
                   </div>
                 </motion.div>
               )}
