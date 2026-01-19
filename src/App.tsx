@@ -238,11 +238,12 @@ function useLocalStorageLog() {
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tracking-wide whitespace-nowrap"
+      className="inline-flex items-center rounded-full px-2 py-0.5 font-medium tracking-wide whitespace-nowrap"
       style={{
         background: "rgba(255, 211, 106, 0.15)", 
         color: "#6B5D52",
         border: "1px solid rgba(255, 138, 61, 0.2)", 
+        fontSize: "11px" // Replaced text-[11px]
       }}
     >
       {children}
@@ -427,7 +428,21 @@ function TopBar({
 }) {
   
   // 統一的按鈕樣式：圓角矩形 (rounded-xl) + 毛玻璃
-  const btnStyle = "flex items-center justify-center w-10 h-10 rounded-xl bg-white/40 backdrop-blur-md border border-[rgba(255,138,61,0.18)] text-[#595048] shadow-sm active:scale-95 transition-all";
+  // 完全移除 JIT，使用標準 style
+  const btnClassName = "flex items-center justify-center w-10 h-10 rounded-xl backdrop-blur-md shadow-sm active:scale-95 transition-all";
+  const btnCustomStyle = {
+      background: "rgba(255, 255, 255, 0.4)",
+      borderColor: "rgba(255, 138, 61, 0.18)",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      color: "#595048"
+  };
+
+  const renderBtn = (onClick: () => void, icon: React.ReactNode) => (
+      <button onClick={onClick} className={btnClassName} style={btnCustomStyle}>
+          {icon}
+      </button>
+  );
 
   let leftBtn = null;
   let rightBtn = null;
@@ -435,28 +450,27 @@ function TopBar({
   if (screen === 'home') {
      // 首頁：左邊空，右邊歷史 (如果有的話)
      if (hasLog) {
-         rightBtn = <button onClick={onOpenLog} className={btnStyle}><LucideHistory size={20} /></button>;
+         rightBtn = renderBtn(onOpenLog, <LucideHistory size={20} />);
      }
   } else if (screen === 'choose') {
      // 選擇頁：左邊返回，右邊關閉(回首頁)
-     leftBtn = <button onClick={onBack} className={btnStyle}><LucideChevronLeft size={24} /></button>;
-     rightBtn = <button onClick={onGoHome} className={btnStyle}><LucideX size={22} /></button>;
+     leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
+     rightBtn = renderBtn(onGoHome, <LucideX size={22} />);
   } else if (screen === 'recommend') {
      if (isRandomMode) {
-         // 隨機模式結果：左邊回首頁 (House)，右邊歷史 (可選，保持一致性)
-         leftBtn = <button onClick={onGoHome} className={btnStyle}><LucideHome size={20} /></button>;
-         // 右邊目前留空，專注於結果
+         // 隨機模式結果：左邊回首頁 (House)
+         leftBtn = renderBtn(onGoHome, <LucideHome size={20} />);
      } else {
          // 一般模式結果：左邊返回修改，右邊關閉(回首頁)
-         leftBtn = <button onClick={onBack} className={btnStyle}><LucideChevronLeft size={24} /></button>;
-         rightBtn = <button onClick={onGoHome} className={btnStyle}><LucideX size={22} /></button>;
+         leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
+         rightBtn = renderBtn(onGoHome, <LucideX size={22} />);
      }
   } else if (screen === 'energy') {
       // 紀錄完成頁：左邊回首頁
-       leftBtn = <button onClick={onGoHome} className={btnStyle}><LucideHome size={20} /></button>;
+       leftBtn = renderBtn(onGoHome, <LucideHome size={20} />);
   } else if (screen === 'log') {
       // 歷史紀錄頁：左邊返回 (回首頁)
-      leftBtn = <button onClick={onBack} className={btnStyle}><LucideChevronLeft size={24} /></button>;
+      leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
   }
 
   return (
@@ -493,17 +507,19 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
            
             <motion.div 
                 key="core-shape"
-                className="absolute inset-6 rounded-[42%]" 
+                // Replaced JIT rounded-[42%] with style
+                className="absolute inset-6" 
                 animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }} 
                 transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }} 
-                style={{ background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)`, transform: `translate(${jitter}px, ${-jitter}px)` }} 
+                style={{ borderRadius: '42%', background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)`, transform: `translate(${jitter}px, ${-jitter}px)` }} 
             />
             <motion.div 
                 key="mist-shape"
-                className="absolute inset-10 rounded-[48%]" 
+                // Replaced JIT rounded-[48%] with style
+                className="absolute inset-10" 
                 animate={mode === "chaos" ? { opacity: [0.25, 0.6, 0.35, 0.7, 0.25], x: [0, 2, -2, 1, 0], y: [0, -1, 2, -2, 0] } : { opacity: [0.35, 0.55, 0.35] }} 
                 transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} 
-                style={{ background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} 
+                style={{ borderRadius: '48%', background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} 
             />
            
           <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
@@ -860,7 +876,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full flex items-start justify-center px-3" style={{ background: warm.bg, color: warm.text }}>
-      <div className="w-full max-w-[420px] pb-10">
+      <div className="w-full max-w-[420px]" style={{ maxWidth: 420 }}>
         <TopBar 
             screen={screen}
             isRandomMode={isRandomMode}
@@ -870,7 +886,7 @@ export default function App() {
             hasLog={log.length > 0}
             title={subtleTitle()} 
         />
-        <div className="px-4 pt-4">
+        <div className="px-4 pt-4 pb-10">
           <div className="rounded-[28px] overflow-hidden relative backdrop-blur-md" style={{ ...card, background: screen === "energy" || screen === "home" ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.72)" }}>
             <AnimatePresence mode="wait">
               {screen === "home" && (
@@ -882,7 +898,7 @@ export default function App() {
                   </div>
                   {log.length > 0 && log[0] && (
                     <div className="mt-4 flex justify-center w-full px-8">
-                      <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleReEat(log[0])} className="group flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors hover:bg-black/5 w-full max-w-[320px]" style={{ color: warm.sub }}>
+                      <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleReEat(log[0])} className="group flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors hover:bg-black/5 w-full max-w-[320px]" style={{ color: warm.sub, maxWidth: 320 }}>
                         <div className="flex items-center justify-center gap-2 text-xs opacity-60 w-full" style={{ letterSpacing: "0.05em" }}><span>↺ 上次吃</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span></div>
                         <div className="text-base leading-snug font-medium text-center w-full break-words opacity-80" style={{ color: warm.text }}>{(log[0].choiceText || "").replace("搜尋：", "")}</div>
                       </motion.button>
@@ -1024,7 +1040,7 @@ export default function App() {
               )}
 
               {screen === "log" && (
-                <motion.div key="log" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-0 h-[600px] flex flex-col">
+                <motion.div key="log" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-0 h-[600px] flex flex-col" style={{ height: 600 }}>
                   <div className="px-6 pt-8 pb-2 flex items-end justify-between gap-3 shrink-0">
                     <div><div className="text-xl" style={{ fontWeight: 700, letterSpacing: "0.02em" }}>我的食力</div><div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>回顧每一次的美味選擇</div></div>
                     <button 
