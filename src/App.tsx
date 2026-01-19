@@ -315,12 +315,6 @@ function navigateToMap(url: string) {
   }
 }
 
-function buildMapsQuery(tags: string[]) {
-  // 這裡不再使用 tags (中文/英文) 來組裝，而是改用 App component 內的 state 直接組裝英文 Query
-  // 所以這裡保留空函式或移除皆可，邏輯已移至 App 內部
-  return ""; 
-}
-
 function useLocalStorageLog() {
   const [log, setLog] = useState<LogEntry[]>(() => {
     try {
@@ -698,15 +692,12 @@ export default function App() {
   const mapsQuery = useMemo(() => {
     let queryParts = [];
     
-    // 1. Budget (Adjective)
     if (budget === "cheap") queryParts.push("cheap", "budget", "affordable");
     if (budget === "expensive") queryParts.push("fancy", "fine dining", "upscale");
     
-    // 2. Taste (Adjective)
     if (temp === "light") queryParts.push("light", "healthy", "fresh");
     if (temp === "rich") queryParts.push("rich flavor", "savory", "heavy");
     
-    // 3. Type (Noun)
     if (hunger === "full") queryParts.push("restaurant", "meal");
     if (hunger === "snack") queryParts.push("snacks", "street food", "finger food");
     
@@ -718,7 +709,6 @@ export default function App() {
     if (hunger === "full") finalParts.push("restaurant");
     if (hunger === "snack") finalParts.push("snacks");
     
-    // 如果沒選類型，補一個通用詞 (理論上不會發生，因為有預設值)
     if (!hunger) finalParts.push("food");
     
     return finalParts.join(" ");
@@ -744,7 +734,6 @@ export default function App() {
     setApiError(null);
     setSearchRadius(radius);
 
-    // ★ 準備 logicTags (給 AI 判斷用的固定代碼)
     const logicTags = [];
     if (temp === 'light') logicTags.push("LIGHT");
     if (temp === 'rich') logicTags.push("RICH");
@@ -788,8 +777,8 @@ export default function App() {
           body: JSON.stringify({ 
             mode: "filter", 
             candidates: rawPlaces,
-            userTags: tags, // 傳送當前語言的標籤 (AI 懂多國語言，且有 Prompt 輔助)
-            logicTags: logicTags, // ★ 傳送固定代碼，確保邏輯判斷 0 失誤
+            userTags: tags,
+            logicTags: logicTags, 
             language: navigator.language 
           }) 
         });
@@ -991,16 +980,24 @@ export default function App() {
         });
     }
 
+    const userLang = navigator.language;
+    const isChinese = userLang.toLowerCase().includes("zh");
+    const langRule = isChinese 
+        ? "請堅持使用繁體中文 (Traditional Chinese)，絕對禁止出現簡體中文或中國大陸用語。" 
+        : `Please respond in ${userLang}.`;
+
     let prompt = "";
     if (targetPlace) {
         prompt = `使用者想吃：${tags.join(', ')}。
         推薦一家店叫「${targetPlace.name}」。
-        請用繁體中文，給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
+        ${langRule}
+        請給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
         同時請安撫使用者，這家店雖然可能不是完美的 100分，但絕對值得一試。
         格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
     } else {
         prompt = `使用者想吃：${tags.join(', ')}。
         附近已經沒有其他符合條件的推薦店家的了。
+        ${langRule}
         請給出一個「通用的餐點建議」（例如：不如去便利商店買個關東煮？或是改吃水果？），語氣幽默一點。
         回傳 JSON 格式：{ "dish": "通用建議", "reason": "一句話幽默建議(30字內)" }`;
     }
