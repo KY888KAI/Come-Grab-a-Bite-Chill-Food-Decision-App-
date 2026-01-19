@@ -1,7 +1,6 @@
 // 這是 Vercel Serverless Function
-// 增加距離計算函式，嚴格把關
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-  const R = 6371; // 地球半徑 (km)
+  const R = 6371; 
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -12,7 +11,6 @@ function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
 }
 
 export default async function handler(req, res) {
-  // 1. 設定 CORS
   res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -21,7 +19,6 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 2. 取得參數 (接收前端傳來的 radius)
   const { lat, lng, query, language, radius = 1000 } = req.body;
 
   if (!lat || !lng) {
@@ -42,7 +39,7 @@ export default async function handler(req, res) {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        // 抓取必要的欄位，包含 priceLevel 與 types 供 AI 判斷
+        // ★ 確保抓取 businessStatus 和 currentOpeningHours (雖然 API 參數 openNow=true 已經過濾，但多拿資料給 AI 判斷更好)
         "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.priceLevel,places.businessStatus,places.types"
       },
       body: JSON.stringify({
@@ -51,11 +48,11 @@ export default async function handler(req, res) {
         locationBias: {
           circle: {
             center: { latitude: lat, longitude: lng },
-            radius: radius // ★ 關鍵：使用動態半徑，不寫死
+            radius: radius 
           }
         },
-        openNow: true,
-        maxResultCount: 20 // ★ 關鍵：抓夠多資料給 AI 挑
+        openNow: true, // ★ 關鍵：只抓取目前營業中的店
+        maxResultCount: 20 
       })
     });
 
@@ -79,19 +76,21 @@ export default async function handler(req, res) {
       openNow: p.businessStatus === 'OPERATIONAL'
     }));
 
-    // ★★★ 距離鐵律 (Distance Hard Limit) ★★★
-    // 這是為了防止「出現 25km 外店家」的絕對防禦
-    // 允許 10% 的誤差緩衝 (e.g. 1000m -> 允許到 1100m)，超過就砍。
+    // 1. 距離過濾
     const maxDistKm = (radius * 1.1) / 1000;
-    
     cleanPlaces = cleanPlaces.filter(p => {
       if (!p.lat || !p.lng) return false;
       const dist = getDistanceFromLatLonInKm(lat, lng, p.lat, p.lng);
       return dist <= maxDistKm;
     });
 
-    // ★ 強制排序：由近到遠
-    // 確保前端在做保底顯示時，拿到的一定是最近的
+    // 2. 評分過濾 (後端第一道防線)
+    // 如果結果夠多 (>5)，先砍掉 3.8 以下的雷店，減輕 AI 負擔
+    if (cleanPlaces.length > 5) {
+        cleanPlaces = cleanPlaces.filter(p => (p.rating || 0) >= 3.8);
+    }
+
+    // 3. 排序 (距離優先)
     cleanPlaces.sort((a, b) => {
         const distA = getDistanceFromLatLonInKm(lat, lng, a.lat, a.lng);
         const distB = getDistanceFromLatLonInKm(lat, lng, b.lat, b.lng);
@@ -105,3 +104,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: "Google API 呼叫失敗", details: error.message });
   }
 }
+
+
