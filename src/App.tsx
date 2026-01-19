@@ -72,7 +72,7 @@ const TRANSLATIONS = {
     next: "Next",
     finish: "Done",
     recommendTitle: "What's Nearby",
-    searching: "AI is picking the best spots...",
+    searching: "Picking the best spots...",
     expanding: "Expanding search area...",
     fallbackMessage: "Couldn't find perfect matches,\nhere are some good alternatives:",
     notFound: "No places found even after expanding search.",
