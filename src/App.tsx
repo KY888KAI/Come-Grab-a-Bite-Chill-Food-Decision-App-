@@ -63,7 +63,7 @@ const TRANSLATIONS = {
 const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" {...props} stroke={color} strokeWidth={strokeWidth} style={{ minWidth: size, minHeight: size }}>{children}</svg>);
 const LucideRotateCcw = (p: any) => <Icon {...p}><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></Icon>;
 const LucideHistory = (p: any) => <Icon {...p}><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /><polyline points="12 6 12 12 16 14" /></Icon>;
-const LucideSparkles = (p: any) => <Icon {...p}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></Icon>;
+const LucideSparkles = (p: any) => <Icon {...p}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z" /></Icon>;
 const LucideTrash2 = (p: any) => <Icon {...p}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></Icon>;
 const LucidePin = (p: any) => <Icon {...p}><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" /></Icon>;
 const LucideHome = (p: any) => <Icon {...p}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>;
@@ -350,16 +350,33 @@ export default function App() {
   };
 
   const callAi = async () => {
-      setIsAiLoading(true);
-      const hidden = realPlaces.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
-      const target = hidden.length ? hidden[Math.floor(Math.random() * hidden.length)] : (realPlaces.length ? realPlaces[Math.floor(Math.random() * realPlaces.length)] : null);
-      try {
-          const res = await fetch(BACKEND_GEMINI_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "suggestion", prompt: target ? `推薦「${target.name}」。請給出一個推薦理由(30字內)。回傳JSON格式：{ "dish": "${target.name}", "reason": "推薦理由" }` : `附近沒推薦的。請給出一個通用建議(30字內)與搜尋關鍵字。回傳JSON格式：{ "dish": "通用建議標題", "reason": "建議內容", "keyword": "搜尋關鍵字" }`, language: navigator.language }) });
-          const data = await res.json();
-          let sg = data.dish ? data : JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, "").replace(/```/g, "") || "{}");
-          if (target) sg.targetPlace = target;
-          setAiSuggestion(sg);
-      } catch (e) { alert("AI Error"); } finally { setIsAiLoading(false); }
+    setIsAiLoading(true);
+    const isFewPlaces = realPlaces.length <= 3;
+
+    const target = isFewPlaces
+      ? null // 資料少時，不鎖定特定店家，讓 AI 自由發揮關鍵字
+      : (realPlaces.filter(p => !visiblePlaces.some(vp => vp.id === p.id))[0] || realPlaces[Math.floor(Math.random() * realPlaces.length)]);
+
+    try {
+      let promptText = "";
+      if (isFewPlaces) {
+        // 方案：AI 標籤導航員
+        promptText = `附近選擇不多(少於3家)。使用者的需求標籤是「${tags.join("、")}」。請根據這些標籤，推薦一個「最精準的搜尋關鍵字」(例如：想吃飽又便宜推薦"平價鐵板燒"、想清淡推薦"越南河粉")。請給我一個理由告訴使用者為什麼要找這個。回傳JSON格式：{ "dish": "試試搜尋：[關鍵字]", "reason": "30字內理由，說明為何這個關鍵字符合需求", "keyword": "[關鍵字]" }`;
+      } else if (target) {
+        // 原本模式：推薦隱藏店家
+        promptText = `推薦「${target.name}」。請給出一個推薦理由(30字內)符合「${tags.join("、")}」。回傳JSON格式：{ "dish": "${target.name}", "reason": "推薦理由" }`;
+      } else {
+        // 防呆：完全沒資料
+        promptText = `附近沒推薦的。請給出一個通用建議(30字內)與搜尋關鍵字，符合「${tags.join("、")}」。回傳JSON格式：{ "dish": "通用建議標題", "reason": "建議內容", "keyword": "搜尋關鍵字" }`;
+      }
+
+      const res = await fetch(BACKEND_GEMINI_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "suggestion", prompt: promptText, language: navigator.language }) });
+      const data = await res.json();
+      let sg = data.dish ? data : JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, "").replace(/```/g, "") || "{}");
+      
+      if (target) sg.targetPlace = target;
+      setAiSuggestion(sg);
+    } catch (e) { alert("AI Error"); } finally { setIsAiLoading(false); }
   };
 
   const cardStyle = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" };
@@ -411,7 +428,24 @@ export default function App() {
                             <div className="text-lg font-bold mb-1" style={{ color: warm.text }}>{aiSuggestion.dish}</div>
                             {aiSuggestion.targetPlace && <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>{aiSuggestion.targetPlace.distance} ・ <span style={{ color: warm.orange }}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : ' - '}</span></div>}
                             <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{ color: "#6B5D52" }}>{aiSuggestion.reason}</div>
-                            <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.keyword || aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
+                            
+                            {/* 按鈕行為修改：如果只有 keyword (沒 targetPlace)，則是「標籤導航搜尋」模式 */}
+                            <PrimaryButton onClick={() => {
+                                if (aiSuggestion.targetPlace) {
+                                    handleStartNav(aiSuggestion.targetPlace);
+                                } else if (aiSuggestion.keyword) {
+                                    save(`搜尋：${aiSuggestion.keyword}`, true);
+                                    go("energy");
+                                    navigateToMap(getGoogleMapsUrl(aiSuggestion.keyword));
+                                } else {
+                                    
+                                    save(`搜尋：${aiSuggestion.dish}`, true);
+                                    go("energy");
+                                    navigateToMap(getGoogleMapsUrl(aiSuggestion.dish));
+                                }
+                            }}>
+                                {aiSuggestion.targetPlace ? t.goNav : `搜尋「${aiSuggestion.keyword || aiSuggestion.dish}」 →`}
+                            </PrimaryButton>
                           </motion.div>
                         )}
                         <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}><div className="text-sm opacity-60 font-medium">{t.manualSearchPrefix}</div><div className="text-sm opacity-90"><span className="underline font-bold" style={{ textUnderlineOffset: 3 }}>{manualSearchQuery}</span></div></motion.button>
