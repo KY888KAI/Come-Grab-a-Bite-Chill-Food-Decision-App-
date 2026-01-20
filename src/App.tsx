@@ -71,17 +71,18 @@ const TRANSLATIONS = {
     next: "下一步",
     finish: "完成",
     recommendTitle: "附近可以吃什麼",
-    searching: "正在掃描附近店家...",
+    searching: "正在掃描附近美食...", // 文案修改：更生活化
     expanding: "正在幫您看遠一點的地方...",
     fallbackMessage: "找不到 100% 符合的，\n這幾家也不錯：",
     notFound: "這裡暫時沒有合適的店，\n試試別的條件？",
-    aiThinking: "AI 大廚正在挑剔評分...",
+    filtering: "正在為您精選最佳餐廳...", // 文案修改：取代原本的 AI Thinking，去 AI 化
+    aiThinking: "AI 大廚正在思考...", // 保留：給第二層按鈕用的酷炫狀態
     aiRetry: "還是不滿意？再試一次",
     aiHelp: "都不滿意？讓 AI 大廚幫你挑",
     aiTag: "AI 專屬推薦",
     goNav: "出發去吃！ →",
     manualSearch: "還是沒看到想吃的？",
-    manualSearchHint: "在地圖搜尋",
+    manualSearchPrefix: "在地圖搜尋", // 新增前綴
     saveTitle: "留下這次的食力",
     saveDesc: "剛剛的選擇已自動紀錄。\n祝你用餐愉快！",
     viewLog: "看我的食力",
@@ -128,13 +129,14 @@ const TRANSLATIONS = {
     expanding: "Looking a bit further...",
     fallbackMessage: "No perfect match, but these are good:",
     notFound: "No suitable places found here.\nTry different options?",
-    aiThinking: "AI Chef is being picky...",
+    filtering: "Picking the best spots for you...",
+    aiThinking: "AI Chef is thinking...",
     aiRetry: "Not happy? Try again",
     aiHelp: "Let AI Chef decide for you",
     aiTag: "AI Recommendation",
     goNav: "Let's Go! →",
     manualSearch: "Still not what you want?",
-    manualSearchHint: "Search on Maps",
+    manualSearchPrefix: "Search on Maps",
     saveTitle: "Choice Recorded",
     saveDesc: "Your choice has been saved.\nBon appétit!",
     viewLog: "View History",
@@ -335,14 +337,15 @@ function useLocalStorageLog() {
   return { log, setLog } as const;
 }
 
+// 修改：白底橘框橘字樣式，與 AI 大廚區隔
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 font-medium tracking-wide whitespace-nowrap"
       style={{
-        background: "rgba(255, 211, 106, 0.15)",
-        color: "#6B5D52",
-        border: "1px solid rgba(255, 138, 61, 0.2)",
+        background: "#FFFFFF",
+        color: warm.orange,
+        border: `1px solid ${warm.orange}`,
         fontSize: "11px"
       }}
     >
@@ -444,8 +447,8 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
             )}
           </div>
           <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-          {/* BUG FIX: 標籤排版修正 */}
-          <div className="flex flex-nowrap gap-1 w-full overflow-x-auto no-scrollbar mask-gradient-right">
+          {/* BUG FIX: 增加 p-1 防止標籤邊框被切掉 */}
+          <div className="flex flex-nowrap gap-1 w-full overflow-x-auto no-scrollbar mask-gradient-right p-1">
             {item.tags?.map((t) => (
               <Tag key={t}>{t}</Tag>
             ))}
@@ -829,7 +832,7 @@ export default function App() {
       if (rawPlaces.length > 0) {
         stopProgress();
         setSearchProgress(70); 
-        startProgressCrawl(70, 90, 2000); // AI 思考中
+        startProgressCrawl(70, 90, 2000); // 正在精選中 (文案已去 AI 化)
 
         const filterRes = await fetch(BACKEND_GEMINI_URL, {
           method: "POST",
@@ -859,15 +862,30 @@ export default function App() {
         if (aiSelectedPlaces.length === 0) {
           // AI 覺得都不行，進入保底機制 (情境 B)
           if (radius < 5000 && retryCount < 1) { 
-             // 如果半徑還小，也許擴大範圍會有更好的？(選擇性策略)
-             // 這裡我們選擇：如果 AI 全滅，先嘗試擴大一次，真的不行再保底
+             // 如果半徑還小，嘗試擴大一次
              stopProgress();
              console.log(`[AI淘汰] ${radius}m 內無合格店家，擴大至 ${radius * 2}m...`);
              searchPlacesWithRipple(radius * 2, retryCount + 1);
              return;
           } else {
-             // 保底機制：選評分高的
-             const fallbackPlaces = rawPlaces
+             // 修正後的保底機制：加入價格判斷
+             let fallbackCandidates = rawPlaces;
+
+             // 如果選了「犒賞自己」(expensive)，先過濾出有價格標記且不是最便宜的 (PRICE_LEVEL_INEXPENSIVE = 1)
+             // 假設 priceLevel 字串越長代表越貴，或依賴 Google API 的枚舉 (PRICE_LEVEL_MODERATE 等)
+             // 這裡做簡單判斷：如果 priceLevel 存在且不是 "PRICE_LEVEL_INEXPENSIVE"，視為中高等級
+             if (budget === 'expensive') {
+                const expensiveOnes = rawPlaces.filter(p => 
+                    p.priceLevel && p.priceLevel !== 'PRICE_LEVEL_INEXPENSIVE' && p.priceLevel !== 'PRICE_LEVEL_FREE'
+                );
+                // 如果有找到貴的，就只在貴的裡面選；如果沒有，只好退回全選 (避免空結果)
+                if (expensiveOnes.length > 0) {
+                    fallbackCandidates = expensiveOnes;
+                }
+             }
+
+             // 從候選名單中選評分最高的 3 家
+             const fallbackPlaces = fallbackCandidates
                .sort((a, b) => (b.rating || 0) - (a.rating || 0))
                .slice(0, 3);
              
@@ -917,7 +935,7 @@ export default function App() {
       setSearchRadius(1000);
       searchPlacesWithRipple(1000);
     }
-  }, [screen, userLocation]); // backendMapsQuery is used inside function, no need dependency here if we want to avoid double trigger, or can add if logic changes.
+  }, [screen, userLocation]); 
 
   const visiblePlaces = useMemo(() => realPlaces.slice(0, VISIBLE_COUNT), [realPlaces]);
 
@@ -929,7 +947,6 @@ export default function App() {
   }
 
   function goHome() {
-    // 5. BUG FIX: 解決卡片殘留
     setRealPlaces([]);
     resetFlow();
     setScreen("home");
@@ -942,7 +959,6 @@ export default function App() {
       return;
     }
     if (screen === "recommend") {
-      // 5. BUG FIX: 解決卡片殘留
       setRealPlaces([]);
       if (isRandomMode) return goHome();
       return setScreen("choose");
@@ -953,7 +969,6 @@ export default function App() {
   }
 
   function startDecision() {
-    // 5. BUG FIX: 解決卡片殘留
     setRealPlaces([]);
     resetFlow();
     setIsRandomMode(false);
@@ -1031,7 +1046,6 @@ export default function App() {
   }
 
   function handleSearchCategory() {
-    // 4. 手動搜尋使用口語短句
     const url = getGoogleMapsUrl(manualSearchQuery);
 
     saveEnergy(`搜尋：${manualSearchQuery}`, true);
@@ -1230,7 +1244,7 @@ export default function App() {
                           {searchProgress < 70 ? (
                             searchRadius > 1000 ? t.expanding : t.searching
                           ) : (
-                            t.aiThinking
+                            t.filtering
                           )}
                         </div>
                         <ProgressBar progress={searchProgress} />
@@ -1304,8 +1318,8 @@ export default function App() {
                           </motion.div>
                         )}
                         <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
-                          <div className="text-sm opacity-60 font-medium">{t.manualSearch}</div>
-                          <div className="text-sm opacity-90"><span className="underline font-bold" style={{ textUnderlineOffset: 3 }}>{t.manualSearchHint}</span></div>
+                          <div className="text-sm opacity-60 font-medium">{t.manualSearchPrefix}</div>
+                          <div className="text-sm opacity-90"><span className="underline font-bold" style={{ textUnderlineOffset: 3 }}>{manualSearchQuery}</span></div>
                         </motion.button>
                       </>
                     )}
