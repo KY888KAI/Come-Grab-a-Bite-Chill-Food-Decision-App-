@@ -644,6 +644,24 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   );
 }
 
+function ProgressDots({ step, total, onStepClick }: { step: number; total: number; onStepClick: (idx: number) => void }) {
+  return (
+    <div className="flex items-center justify-center gap-2 mt-4">
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          onClick={() => { if (i <= step) onStepClick(i); }}
+          className={`h-2 w-2 rounded-full transition-all duration-200 ${i <= step ? 'cursor-pointer' : ''}`}
+          style={{
+            background: i === step ? warm.orange : "rgba(255, 138, 61, 0.15)",
+            transform: i === step ? "scale(1.25)" : "scale(1)",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const t = useLanguage();
   const { log, setLog } = useLocalStorageLog();
