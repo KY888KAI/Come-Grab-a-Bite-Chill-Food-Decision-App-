@@ -27,7 +27,7 @@ interface Place {
   rating?: number;
   userRatingsTotal?: number;
   openNow?: boolean;
-  types?: string[]; // 新增：Google Places 類型標籤，用於全域過濾
+  types?: string[]; // Google Places 類型
 }
 
 interface LogEntry {
@@ -76,11 +76,11 @@ const TRANSLATIONS = {
     expanding: "正在幫您看遠一點的地方...",
     fallbackMessage: "找不到 100% 符合的，\n這幾家也不錯：",
     notFound: "這裡暫時沒有合適的店，\n試試別的條件？",
-    filtering: "正在為您精選最佳餐廳...",
-    aiThinking: "AI 大廚正在思考...",
+    filtering: "主廚正在為您精選菜單...", // 去 AI 化文案
+    aiThinking: "AI 大廚正在思考...", // 保留給第二層
     aiRetry: "還是不滿意？再試一次",
-    aiHelp: "都不滿意？讓 AI 大廚幫你挑",
-    aiTag: "AI 專屬推薦",
+    aiHelp: "都不滿意？交給主廚決定", // 更像人話
+    aiTag: "主廚精選", // 去 AI 化
     goNav: "出發去吃！ →",
     manualSearch: "還是沒看到想吃的？",
     manualSearchPrefix: "在地圖搜尋",
@@ -130,11 +130,11 @@ const TRANSLATIONS = {
     expanding: "Looking a bit further...",
     fallbackMessage: "No perfect match, but these are good:",
     notFound: "No suitable places found here.\nTry different options?",
-    filtering: "Picking the best spots for you...",
+    filtering: "Chef is picking the best spots...",
     aiThinking: "AI Chef is thinking...",
     aiRetry: "Not happy? Try again",
-    aiHelp: "Let AI Chef decide for you",
-    aiTag: "AI Recommendation",
+    aiHelp: "Let Chef decide",
+    aiTag: "Chef's Choice",
     goNav: "Let's Go! →",
     manualSearch: "Still not what you want?",
     manualSearchPrefix: "Search on Maps",
@@ -454,9 +454,9 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
             )}
           </div>
           <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-          {/* BUG FIX: 增加 p-1 防止標籤邊框被切掉 */}
-          <div className="flex flex-nowrap gap-1 w-full overflow-x-auto no-scrollbar mask-gradient-right p-1">
-            {item.tags?.map((t) => (
+          {/* BUG FIX: 改回 flex-wrap 且限制數量，避免與左滑刪除衝突 */}
+          <div className="flex flex-wrap gap-1 w-full mt-1">
+            {item.tags?.slice(0, 3).map((t) => (
               <Tag key={t}>{t}</Tag>
             ))}
           </div>
@@ -711,27 +711,26 @@ export default function App() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [searchRadius, setSearchRadius] = useState(1000);
 
-  // 新增：搜尋進度狀態 (0-100)
   const [searchProgress, setSearchProgress] = useState(0);
 
   const derived = useMemo(() => computeTags({ temp, hunger, budget }, t), [temp, hunger, budget, t]);
   const tags = derived.tags;
-  // style is declared but never read, removing to fix error
-  // const style = budget === "expensive" ? "rich" : "light";
+  // const style = budget === "expensive" ? "rich" : "light"; // backend logic handles this
 
-  // 3. 搜尋邏輯重構：後端 API 專用關鍵字 (廣泛，確保抓到資料)
+  // 搜尋邏輯：後端 API 專用關鍵字 (廣泛，確保抓到資料)
   const backendMapsQuery = useMemo(() => {
     if (hunger === "full") return "restaurant";
     if (hunger === "snack") return "snack";
-    return "food"; // 沒選就搜食物
+    return "food"; 
   }, [hunger]);
 
-  // 4. 手動搜尋關鍵字優化：口語短句 (for 顯示 & 手動連結)
+  // 手動搜尋關鍵字優化：邏輯修正 (預算優先)
   const manualSearchQuery = useMemo(() => {
+    if (budget === "expensive") return "找間精緻好料"; // 預算優先
+    if (budget === "cheap" && hunger === "snack") return "尋覓解饞小吃"; // 便宜且解饞
     if (hunger === "full") return "找間好餐廳";
-    if (hunger === "snack") return "尋覓解饞小吃";
     return "探索附近美食";
-  }, [hunger]);
+  }, [hunger, budget]);
 
   const groupedLogs = useMemo(() => groupLogsByDate(log, t), [log, t]);
 
@@ -746,12 +745,11 @@ export default function App() {
     }
   }, []);
 
-  // 搜尋進度計時器
   const progressInterval = useRef<number | null>(null);
 
   const startProgressCrawl = (start: number, end: number, durationMs: number) => {
     if (progressInterval.current) clearInterval(progressInterval.current);
-    const stepTime = 100; // 每 100ms 更新一次
+    const stepTime = 100; 
     const steps = durationMs / stepTime;
     const increment = (end - start) / steps;
 
@@ -779,13 +777,10 @@ export default function App() {
     setApiError(null);
     setSearchRadius(radius);
 
-    // 2. 進度條邏輯
     if (retryCount === 0) {
-      // 初始搜尋
-      startProgressCrawl(10, 40, 3000); // 3秒內爬到 40%
+      startProgressCrawl(10, 40, 3000); 
     } else {
-      // 擴大搜尋中
-      startProgressCrawl(40, 60, 4000); // 4秒內爬到 60%
+      startProgressCrawl(40, 60, 4000); 
     }
 
     const logicTags = [];
@@ -796,7 +791,6 @@ export default function App() {
     if (hunger === 'full') logicTags.push("FULL");
     if (hunger === 'snack') logicTags.push("SNACK");
 
-    // Re-calculating style here since we removed the unused var earlier
     const currentStyle: Style = budget === "expensive" ? "rich" : "light";
 
     try {
@@ -807,7 +801,7 @@ export default function App() {
         body: JSON.stringify({
           lat: userLocation.lat,
           lng: userLocation.lng,
-          query: backendMapsQuery, // 使用廣泛關鍵字
+          query: backendMapsQuery, 
           language: navigator.language,
           radius: radius
         })
@@ -825,18 +819,18 @@ export default function App() {
           return;
         } else {
           setRealPlaces([]);
-          setApiError(t.notFound); // 情境 A: 真的沒資料
+          setApiError(t.notFound); 
           setSearchProgress(100);
           setIsRealLoading(false);
           return;
         }
       }
 
-      // Step 2: AI Filtering (Gemini)
+      // Step 2: AI Filtering (Gemini) - 關鍵修正：交給後端全權處理
       if (rawPlaces.length > 0) {
         stopProgress();
         setSearchProgress(70); 
-        startProgressCrawl(70, 90, 2000); // 正在精選中 (文案已去 AI 化)
+        startProgressCrawl(70, 90, 2000); 
 
         const filterRes = await fetch(BACKEND_GEMINI_URL, {
           method: "POST",
@@ -845,7 +839,7 @@ export default function App() {
             mode: "filter",
             candidates: rawPlaces,
             userTags: tags,
-            logicTags: logicTags,
+            logicTags: logicTags, // 傳送完整的邏輯標籤給後端
             language: navigator.language
           })
         });
@@ -864,46 +858,21 @@ export default function App() {
         const aiSelectedPlaces = rawPlaces.filter((_, index) => finalIndices.includes(index));
 
         if (aiSelectedPlaces.length === 0) {
-          // AI 覺得都不行，進入保底機制 (情境 B)
+          // AI 覺得都不行 (嚴格過濾後)
           if (radius < 5000 && retryCount < 1) { 
-             // 如果半徑還小，嘗試擴大一次
              stopProgress();
              console.log(`[AI淘汰] ${radius}m 內無合格店家，擴大至 ${radius * 2}m...`);
              searchPlacesWithRipple(radius * 2, retryCount + 1);
              return;
           } else {
-             // 修正後的保底機制：加入 Global Type 全球化判斷
-             let fallbackCandidates = rawPlaces;
-
-             if (budget === 'expensive') {
-                // 定義全球通用的廉價標籤 (Google Types)
-                const cheapTypes = ['fast_food_restaurant', 'street_food', 'meal_takeaway', 'convenience_store'];
-
-                // 1. 第一層過濾：優先找有明確標示中高價位的店
-                const expensiveOnes = rawPlaces.filter(p => 
-                    p.priceLevel && (p.priceLevel === 'PRICE_LEVEL_MODERATE' || p.priceLevel === 'PRICE_LEVEL_EXPENSIVE' || p.priceLevel === 'PRICE_LEVEL_VERY_EXPENSIVE')
-                );
-                
-                if (expensiveOnes.length > 0) {
-                    fallbackCandidates = expensiveOnes;
-                } else {
-                    // 2. 第二層過濾：如果沒有價格標籤，則剔除廉價類型 (Global Logic)
-                    const potentialExpensive = rawPlaces.filter(p => {
-                        // 檢查該店家的 types 是否包含任何 cheapTypes
-                        const hasCheapType = p.types?.some(t => cheapTypes.includes(t));
-                        return !hasCheapType;
-                    });
-                    
-                    if (potentialExpensive.length > 0) {
-                        fallbackCandidates = potentialExpensive;
-                    }
-                    // 如果連類型過濾都全軍覆沒，只好退回 rawPlaces
-                }
-             }
-
-             // 從候選名單中選評分最高的 (注意：移除 .slice(0, 3) 以保留完整名單供 AI 大廚使用)
-             const fallbackPlaces = fallbackCandidates
-               .sort((a, b) => (b.rating || 0) - (a.rating || 0));
+             // 真的都找不到，AI 建議回傳空值，啟動前端的「fallback」
+             // 但我們現在已經把邏輯移到後端了，如果後端說空，就是真的空
+             // 這裡做一個最後的評分排序顯示，但不再做笨拙的關鍵字過濾，因為後端已經篩過了
+             // 如果連後端都篩不到，代表這附近真的沒有符合「犒賞」的店
+             
+             // 策略：顯示評分最高的，但給出提示
+             const fallbackPlaces = rawPlaces
+               .sort((a, b) => (b.rating || 0) - (a.rating || 0)); // 保留所有資料，不 slice
              
              const placesWithDist = fallbackPlaces.map((p) => {
                const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
@@ -912,8 +881,8 @@ export default function App() {
              
              placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
 
-             setRealPlaces(placesWithDist);
-             setApiError(t.fallbackMessage); // 情境 B: 有資料但非完美
+             setRealPlaces(placesWithDist); // 存入完整資料
+             setApiError(t.fallbackMessage); 
              setSearchProgress(100);
              setIsRealLoading(false);
              return;
@@ -927,7 +896,7 @@ export default function App() {
 
         placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
 
-        setRealPlaces(placesWithDist);
+        setRealPlaces(placesWithDist); // 存入完整資料
         setSearchProgress(100);
         setIsRealLoading(false);
       }
@@ -953,7 +922,7 @@ export default function App() {
     }
   }, [screen, userLocation]); 
 
-  // 修改：只在顯示層進行 slice，確保 realPlaces 保留完整資料供 AI 大廚使用
+  // 只在顯示層 slice，保留完整資料給 AI 大廚
   const visiblePlaces = useMemo(() => realPlaces.slice(0, VISIBLE_COUNT), [realPlaces]);
 
   function resetFlow() {
@@ -1083,13 +1052,14 @@ export default function App() {
 
     let targetPlace: Place | null = null;
 
-    // AI Chef logic: pick from hidden candidates
+    // AI Chef uses the FULL realPlaces list (hidden candidates)
     const hiddenCandidates = realPlaces.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
 
     if (hiddenCandidates.length > 0) {
         targetPlace = hiddenCandidates[Math.floor(Math.random() * hiddenCandidates.length)];
     } else {
-        targetPlace = null;
+        // Fallback: pick from visible if no hidden
+        targetPlace = realPlaces.length > 0 ? realPlaces[Math.floor(Math.random() * realPlaces.length)] : null;
     }
 
     const userLang = navigator.language;
