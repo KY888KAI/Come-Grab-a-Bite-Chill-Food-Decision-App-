@@ -76,11 +76,11 @@ const TRANSLATIONS = {
     expanding: "正在幫您看遠一點的地方...",
     fallbackMessage: "找不到 100% 符合的，這幾家也不錯：", 
     notFound: "這裡暫時沒有合適的店，\n試試別的條件？",
-    filtering: "正在為您精選最佳餐廳...", // 修正：與「掃描」一致，去人設化
-    aiThinking: "AI 大廚正在思考...", // 保留：大招狀態
+    filtering: "正在為您精選最佳餐廳...", 
+    aiThinking: "AI 大廚正在思考...", 
     aiRetry: "還是不滿意？再試一次",
-    aiHelp: "都不滿意？交給 AI 大廚決定", // 修正：恢復 AI 大廚稱號
-    aiTag: "AI 大廚精選", // 修正：恢復 AI 大廚稱號
+    aiHelp: "都不滿意？交給 AI 大廚決定",
+    aiTag: "AI 大廚精選",
     goNav: "出發去吃！ →",
     manualSearch: "還是沒看到想吃的？",
     manualSearchPrefix: "在地圖搜尋",
@@ -454,7 +454,7 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
             )}
           </div>
           <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-          {/* BUG FIX: 改為單行固定 (flex-nowrap) + 超出隱藏 (overflow-hidden)，避免換行破壞版面 */}
+          {/* BUG FIX: 改回 flex-wrap 且限制數量，避免與左滑刪除衝突 */}
           <div className="flex flex-nowrap items-center gap-1.5 w-full mt-1 overflow-hidden">
             {item.tags?.slice(0, 3).map((t) => (
               <div key={t} className="shrink-0">
@@ -644,24 +644,6 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   );
 }
 
-function ProgressDots({ step, total, onStepClick }: { step: number; total: number; onStepClick: (idx: number) => void }) {
-  return (
-    <div className="flex items-center justify-center gap-2 mt-4">
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          onClick={() => { if (i <= step) onStepClick(i); }}
-          className={`h-2 w-2 rounded-full transition-all duration-200 ${i <= step ? 'cursor-pointer' : ''}`}
-          style={{
-            background: i === step ? warm.orange : "rgba(255, 138, 61, 0.15)",
-            transform: i === step ? "scale(1.25)" : "scale(1)",
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 export default function App() {
   const t = useLanguage();
   const { log, setLog } = useLocalStorageLog();
@@ -719,12 +701,17 @@ export default function App() {
   const tags = derived.tags;
   // const style = budget === "expensive" ? "rich" : "light"; // backend logic handles this
 
-  // 3. 搜尋邏輯重構：後端 API 專用關鍵字 (廣泛，確保抓到資料)
+  // 3. 搜尋邏輯重構：針對「解饞 + 犒賞」使用特殊的關鍵字組合
   const backendMapsQuery = useMemo(() => {
+    // 特殊情境：解饞 + 犒賞 -> 搜甜點、餐酒館、咖啡廳
+    if (hunger === "snack" && budget === "expensive") {
+        return "bistro cafe bar dessert_shop";
+    }
+    // 一般情境
     if (hunger === "full") return "restaurant";
-    if (hunger === "snack") return "snack";
+    if (hunger === "snack") return "snack street_food"; // 解饞 + 隨便吃吃 -> 搜小吃
     return "food"; 
-  }, [hunger]);
+  }, [hunger, budget]);
 
   // 4. 手動搜尋關鍵字優化：口語短句 (for 顯示 & 手動連結)
   const manualSearchQuery = useMemo(() => {
@@ -882,12 +869,59 @@ export default function App() {
              searchPlacesWithRipple(radius * 2, retryCount + 1);
              return;
           } else {
-             // Fallback: Use all places (sorted by rating usually better for fallback)
-             // 修正：這裡不 slice 了，完整保留，解決 AI 大廚重複問題
-             const fallbackPlaces = allPlacesWithDist.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+             // 修正後的保底機制：加入 Global Type 全球化判斷 (零容忍)
+             let fallbackCandidates = rawPlaces;
+
+             if (budget === 'expensive') {
+                // 定義全球通用的廉價標籤 (Google Types)
+                const cheapTypes = ['fast_food_restaurant', 'street_food', 'meal_takeaway', 'convenience_store'];
+
+                // 1. 第一層過濾：優先找有明確標示中高價位的店
+                const expensiveOnes = rawPlaces.filter(p => 
+                    p.priceLevel && (p.priceLevel === 'PRICE_LEVEL_MODERATE' || p.priceLevel === 'PRICE_LEVEL_EXPENSIVE' || p.priceLevel === 'PRICE_LEVEL_VERY_EXPENSIVE')
+                );
+                
+                if (expensiveOnes.length > 0) {
+                    fallbackCandidates = expensiveOnes;
+                } else {
+                    // 2. 第二層過濾：如果沒有價格標籤，則剔除廉價類型 (Global Logic)
+                    const potentialExpensive = rawPlaces.filter(p => {
+                        // 檢查該店家的 types 是否包含任何 cheapTypes
+                        const hasCheapType = p.types?.some(t => cheapTypes.includes(t));
+                        return !hasCheapType;
+                    });
+                    
+                    if (potentialExpensive.length > 0) {
+                        fallbackCandidates = potentialExpensive;
+                    } else {
+                        // 零容忍：如果連潛在的貴店都沒有，強制回傳空陣列
+                        fallbackCandidates = [];
+                    }
+                }
+             }
+
+             // 如果名單為空 (被零容忍濾光了)
+             if (fallbackCandidates.length === 0) {
+                 setRealPlaces([]);
+                 setApiError(t.notFound); // 顯示「這裡暫時沒有合適的店」
+                 setSearchProgress(100);
+                 setIsRealLoading(false);
+                 return;
+             }
+
+             // 從候選名單中選評分最高的
+             const fallbackPlaces = fallbackCandidates
+               .sort((a, b) => (b.rating || 0) - (a.rating || 0));
              
-             setRealPlaces(fallbackPlaces); // 存入完整資料
-             setApiError(t.fallbackMessage); 
+             const placesWithDist = fallbackPlaces.map((p) => {
+               const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
+               return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: currentStyle, hunger: hunger, speed: speed };
+             });
+             
+             placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
+
+             setRealPlaces(placesWithDist);
+             setApiError(t.fallbackMessage); // 情境 B: 有資料但非完美
              setSearchProgress(100);
              setIsRealLoading(false);
              return;
