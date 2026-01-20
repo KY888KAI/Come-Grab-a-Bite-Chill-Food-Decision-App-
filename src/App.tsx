@@ -27,6 +27,7 @@ interface Place {
   rating?: number;
   userRatingsTotal?: number;
   openNow?: boolean;
+  types?: string[]; // 新增：Google Places 類型標籤，用於全域過濾
 }
 
 interface LogEntry {
@@ -71,18 +72,18 @@ const TRANSLATIONS = {
     next: "下一步",
     finish: "完成",
     recommendTitle: "附近可以吃什麼",
-    searching: "正在掃描附近美食...", // 文案修改：更生活化
+    searching: "正在掃描附近美食...",
     expanding: "正在幫您看遠一點的地方...",
     fallbackMessage: "找不到 100% 符合的，\n這幾家也不錯：",
     notFound: "這裡暫時沒有合適的店，\n試試別的條件？",
-    filtering: "正在為您精選最佳餐廳...", // 文案修改：取代原本的 AI Thinking，去 AI 化
-    aiThinking: "AI 大廚正在思考...", // 保留：給第二層按鈕用的酷炫狀態
+    filtering: "正在為您精選最佳餐廳...",
+    aiThinking: "AI 大廚正在思考...",
     aiRetry: "還是不滿意？再試一次",
     aiHelp: "都不滿意？讓 AI 大廚幫你挑",
     aiTag: "AI 專屬推薦",
     goNav: "出發去吃！ →",
     manualSearch: "還是沒看到想吃的？",
-    manualSearchPrefix: "在地圖搜尋", // 新增前綴
+    manualSearchPrefix: "在地圖搜尋",
     saveTitle: "留下這次的食力",
     saveDesc: "剛剛的選擇已自動紀錄。\n祝你用餐愉快！",
     viewLog: "看我的食力",
@@ -200,6 +201,12 @@ const LucideHistory = (props: any) => (
     <polyline points="1 4 1 10 7 10" />
     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
     <polyline points="12 6 12 12 16 14" />
+  </Icon>
+);
+
+const LucideSparkles = (props: any) => (
+  <Icon {...props}>
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
   </Icon>
 );
 
@@ -337,15 +344,15 @@ function useLocalStorageLog() {
   return { log, setLog } as const;
 }
 
-// 修改：白底橘框橘字樣式，與 AI 大廚區隔
+// 修改：淺橘底實心樣式 (PillButton 風格)，統一視覺
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 font-medium tracking-wide whitespace-nowrap"
       style={{
-        background: "#FFFFFF",
-        color: warm.orange,
-        border: `1px solid ${warm.orange}`,
+        background: "rgba(255, 211, 106, 0.15)", // 淺橘色背景
+        color: "#6B5D52", // 深色文字
+        border: "none", // 移除邊框，改為實心風格
         fontSize: "11px"
       }}
     >
@@ -726,9 +733,6 @@ export default function App() {
     return "探索附近美食";
   }, [hunger]);
 
-  // Construct mapQuery for backend to keep consistency with original logic structure if needed
-  // But actually we use backendMapsQuery for the fetch now.
-  
   const groupedLogs = useMemo(() => groupLogsByDate(log, t), [log, t]);
 
   const VISIBLE_COUNT = 3;
@@ -868,26 +872,38 @@ export default function App() {
              searchPlacesWithRipple(radius * 2, retryCount + 1);
              return;
           } else {
-             // 修正後的保底機制：加入價格判斷
+             // 修正後的保底機制：加入 Global Type 全球化判斷
              let fallbackCandidates = rawPlaces;
 
-             // 如果選了「犒賞自己」(expensive)，先過濾出有價格標記且不是最便宜的 (PRICE_LEVEL_INEXPENSIVE = 1)
-             // 假設 priceLevel 字串越長代表越貴，或依賴 Google API 的枚舉 (PRICE_LEVEL_MODERATE 等)
-             // 這裡做簡單判斷：如果 priceLevel 存在且不是 "PRICE_LEVEL_INEXPENSIVE"，視為中高等級
              if (budget === 'expensive') {
+                // 定義全球通用的廉價標籤 (Google Types)
+                const cheapTypes = ['fast_food_restaurant', 'street_food', 'meal_takeaway', 'convenience_store'];
+
+                // 1. 第一層過濾：優先找有明確標示中高價位的店
                 const expensiveOnes = rawPlaces.filter(p => 
-                    p.priceLevel && p.priceLevel !== 'PRICE_LEVEL_INEXPENSIVE' && p.priceLevel !== 'PRICE_LEVEL_FREE'
+                    p.priceLevel && (p.priceLevel === 'PRICE_LEVEL_MODERATE' || p.priceLevel === 'PRICE_LEVEL_EXPENSIVE' || p.priceLevel === 'PRICE_LEVEL_VERY_EXPENSIVE')
                 );
-                // 如果有找到貴的，就只在貴的裡面選；如果沒有，只好退回全選 (避免空結果)
+                
                 if (expensiveOnes.length > 0) {
                     fallbackCandidates = expensiveOnes;
+                } else {
+                    // 2. 第二層過濾：如果沒有價格標籤，則剔除廉價類型 (Global Logic)
+                    const potentialExpensive = rawPlaces.filter(p => {
+                        // 檢查該店家的 types 是否包含任何 cheapTypes
+                        const hasCheapType = p.types?.some(t => cheapTypes.includes(t));
+                        return !hasCheapType;
+                    });
+                    
+                    if (potentialExpensive.length > 0) {
+                        fallbackCandidates = potentialExpensive;
+                    }
+                    // 如果連類型過濾都全軍覆沒，只好退回 rawPlaces
                 }
              }
 
-             // 從候選名單中選評分最高的 3 家
+             // 從候選名單中選評分最高的 (注意：移除 .slice(0, 3) 以保留完整名單供 AI 大廚使用)
              const fallbackPlaces = fallbackCandidates
-               .sort((a, b) => (b.rating || 0) - (a.rating || 0))
-               .slice(0, 3);
+               .sort((a, b) => (b.rating || 0) - (a.rating || 0));
              
              const placesWithDist = fallbackPlaces.map((p) => {
                const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
@@ -937,6 +953,7 @@ export default function App() {
     }
   }, [screen, userLocation]); 
 
+  // 修改：只在顯示層進行 slice，確保 realPlaces 保留完整資料供 AI 大廚使用
   const visiblePlaces = useMemo(() => realPlaces.slice(0, VISIBLE_COUNT), [realPlaces]);
 
   function resetFlow() {
@@ -1066,6 +1083,7 @@ export default function App() {
 
     let targetPlace: Place | null = null;
 
+    // AI Chef logic: pick from hidden candidates
     const hiddenCandidates = realPlaces.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
 
     if (hiddenCandidates.length > 0) {
@@ -1294,19 +1312,19 @@ export default function App() {
                         <div className="pt-2 pb-2">
                           <motion.button whileTap={{ scale: 0.98 }} onClick={callGeminiChef} disabled={isAiLoading} className="w-full rounded-2xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)", border: "1px dashed rgba(255,159,94,0.4)", color: warm.text }}>
                             {isAiLoading ? (
-                              <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl">✨</span><span className="font-bold text-sm">{t.aiThinking}</span></div>
+                              <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl"><LucideSparkles size={20} color={warm.orange}/></span><span className="font-bold text-sm">{t.aiThinking}</span></div>
                             ) : aiSuggestion ? (
                               <div className="text-sm font-bold flex items-center justify-center gap-2" style={{ letterSpacing: "0.03em" }}><span>↻</span> {t.aiRetry}</div>
                             ) : (
                               <>
-                                <div className="text-sm font-bold flex items-center justify-center gap-2" style={{ letterSpacing: "0.03em" }}><span>✨</span> {t.aiHelp}</div>
+                                <div className="text-sm font-bold flex items-center justify-center gap-2" style={{ letterSpacing: "0.03em" }}><LucideSparkles size={16} color={warm.orange}/> {t.aiHelp}</div>
                               </>
                             )}
                           </motion.button>
                         </div>
                         {aiSuggestion && (
                           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl p-5 mb-4 text-left" style={{ background: "rgba(255,255,255,0.9)", border: `1px solid ${warm.orange}`, boxShadow: warm.shadowActive }}>
-                            <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider">✨ {t.aiTag}</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
+                            <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider flex items-center gap-1"><LucideSparkles size={12}/> {t.aiTag}</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
                             <div className="text-lg font-bold mb-1" style={{ color: warm.text }}>{aiSuggestion.dish}</div>
                             {aiSuggestion.targetPlace && (
                               <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>
