@@ -6,7 +6,6 @@ const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count";
 const BACKEND_API_URL = "/api/places";
 const BACKEND_GEMINI_URL = "/api/gemini";
 
-// --- 色票與樣式設定 (Design Tokens) ---
 const warm = {
   bg: "#FAF9F6", text: "#595048", sub: "#9C968F", orange: "#FF9F5E", yellow: "#FFD97F",
   border: "1px solid rgba(255, 138, 61, 0.5)", borderSubtle: "1px solid rgba(255, 138, 61, 0.18)",
@@ -14,11 +13,8 @@ const warm = {
   shadowActive: "0 6px 20px -4px rgba(255, 138, 61, 0.2)", highlight: "inset 0 1px 0 0 rgba(255, 255, 255, 0.6)", deleteRed: "#FF6B6B",
 } as const;
 
-type Temp = "light" | "rich"; 
-type Hunger = "full" | "snack"; 
-type Speed = "fast" | "sit";
-type Budget = "cheap" | "expensive"; 
-type Style = "light" | "rich";
+type Temp = "light" | "rich"; type Hunger = "full" | "snack"; type Speed = "fast" | "sit";
+type Budget = "cheap" | "expensive"; type Style = "light" | "rich";
 type Screen = "home" | "choose" | "recommend" | "energy" | "log";
 
 interface Place {
@@ -67,14 +63,13 @@ const TRANSLATIONS = {
 const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" {...props} stroke={color} strokeWidth={strokeWidth} style={{ minWidth: size, minHeight: size }}>{children}</svg>);
 const LucideRotateCcw = (p: any) => <Icon {...p}><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></Icon>;
 const LucideHistory = (p: any) => <Icon {...p}><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /><polyline points="12 6 12 12 16 14" /></Icon>;
-const LucideSparkles = (p: any) => <Icon {...p}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z" /></Icon>;
+const LucideSparkles = (p: any) => <Icon {...p}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></Icon>;
 const LucideTrash2 = (p: any) => <Icon {...p}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></Icon>;
 const LucidePin = (p: any) => <Icon {...p}><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" /></Icon>;
 const LucideHome = (p: any) => <Icon {...p}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>;
 const LucideX = (p: any) => <Icon {...p}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
 const LucideChevronLeft = (p: any) => <Icon {...p}><path d="m15 18-6-6 6-6" /></Icon>;
 
-// --- API Functions (前端呼叫後端用) ---
 const fetchGooglePlaces = async (lat: number, lng: number, query: string, radius: number) => {
   const res = await fetch(BACKEND_API_URL, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -95,7 +90,7 @@ const fetchGeminiFilter = async (candidates: Place[], userTags: string[], logicT
   return (parsed.ids || []) as number[];
 };
 
-// --- Utilities (小工具) ---
+// --- Utilities ---
 function clamp(n: number, a: number, b: number) { return Math.min(b, Math.max(a, n)); }
 function nowISO() { return new Date().toISOString(); }
 function fmtDate(iso: string) {
@@ -145,7 +140,6 @@ function useLocalStorageLog() {
   return { log, setLog } as const;
 }
 
-// --- Components (元件) ---
 const Tag = ({ children }: { children: React.ReactNode }) => (
   <span className="inline-flex items-center rounded-full px-2.5 py-1 font-medium tracking-wide whitespace-nowrap" style={{ background: "rgba(255, 211, 106, 0.15)", color: "#6B5D52", fontSize: "13px" }}>{children}</span>
 );
@@ -356,42 +350,16 @@ export default function App() {
   };
 
   const callAi = async () => {
-    setIsAiLoading(true);
-    const isFewPlaces = realPlaces.length <= 3;
-
-    // 策略調整：
-    // 如果店很少 (<=3)，強制從這些店裡挑一家來推薦「必點菜色」（方案 A）。
-    // 如果店很多，嘗試挑選「沒顯示在畫面上的店」（隱藏好店）來製造驚喜。
-    const target = isFewPlaces
-      ? realPlaces[Math.floor(Math.random() * realPlaces.length)]
-      : (realPlaces.filter(p => !visiblePlaces.some(vp => vp.id === p.id))[0] || realPlaces[Math.floor(Math.random() * realPlaces.length)]);
-
-    try {
-      let promptText = "";
-      if (target) {
-        if (isFewPlaces) {
-          // 方案 A：老饕點菜模式
-          promptText = `目前候選店家很少，使用者可能在猶豫。請針對「${target.name}」這家店，推薦一道「${tags.join("、")}」風格的必點招牌菜(Signature Dish)。
-            請用老饕的口吻，告訴使用者為什麼這道菜是必點。
-            回傳JSON格式：{ "dish": "招牌菜名稱", "reason": "30字內的老饕推薦理由", "keyword": "${target.name} 招牌菜名稱" }`;
-        } else {
-          // 原本模式：推薦店家
-          promptText = `推薦「${target.name}」。請給出一個推薦理由(30字內)符合「${tags.join("、")}」。回傳JSON格式：{ "dish": "${target.name}", "reason": "推薦理由" }`;
-        }
-      } else {
-        // 真的完全沒店
-        promptText = `附近沒推薦的。請給出一個通用建議(30字內)與搜尋關鍵字，符合「${tags.join("、")}」。回傳JSON格式：{ "dish": "通用建議標題", "reason": "建議內容", "keyword": "搜尋關鍵字" }`;
-      }
-
-      const res = await fetch(BACKEND_GEMINI_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "suggestion", prompt: promptText, language: navigator.language }) });
-      const data = await res.json();
-      let sg = data.dish ? data : JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, "").replace(/```/g, "") || "{}");
-      
-      // ★ 關鍵綁定：無論 AI 推薦的是菜還是店，targetPlace 永遠是那家店
-      if (target) sg.targetPlace = target;
-      
-      setAiSuggestion(sg);
-    } catch (e) { alert("AI Error"); } finally { setIsAiLoading(false); }
+      setIsAiLoading(true);
+      const hidden = realPlaces.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
+      const target = hidden.length ? hidden[Math.floor(Math.random() * hidden.length)] : (realPlaces.length ? realPlaces[Math.floor(Math.random() * realPlaces.length)] : null);
+      try {
+          const res = await fetch(BACKEND_GEMINI_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "suggestion", prompt: target ? `推薦「${target.name}」。請給出一個推薦理由(30字內)。回傳JSON格式：{ "dish": "${target.name}", "reason": "推薦理由" }` : `附近沒推薦的。請給出一個通用建議(30字內)與搜尋關鍵字。回傳JSON格式：{ "dish": "通用建議標題", "reason": "建議內容", "keyword": "搜尋關鍵字" }`, language: navigator.language }) });
+          const data = await res.json();
+          let sg = data.dish ? data : JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, "").replace(/```/g, "") || "{}");
+          if (target) sg.targetPlace = target;
+          setAiSuggestion(sg);
+      } catch (e) { alert("AI Error"); } finally { setIsAiLoading(false); }
   };
 
   const cardStyle = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" };
@@ -441,20 +409,9 @@ export default function App() {
                           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl p-5 mb-4 text-left" style={{ background: "rgba(255,255,255,0.9)", border: `1px solid ${warm.orange}`, boxShadow: warm.shadowActive }}>
                             <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider flex items-center gap-1"><LucideSparkles size={12} /> {t.aiTag}</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
                             <div className="text-lg font-bold mb-1" style={{ color: warm.text }}>{aiSuggestion.dish}</div>
-                            {/* 如果推薦的是菜色（dish != 店名），顯示店名來源，避免使用者困惑 */}
-                            {aiSuggestion.targetPlace && aiSuggestion.dish !== aiSuggestion.targetPlace.name && (
-                              <div className="text-sm font-bold mb-2 flex items-center gap-1" style={{ color: warm.orange }}>
-                                <span>📍</span>
-                                <span>位於：{aiSuggestion.targetPlace.name}</span>
-                              </div>
-                            )}
-                            {aiSuggestion.targetPlace && aiSuggestion.dish === aiSuggestion.targetPlace.name && (
-                                <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>{aiSuggestion.targetPlace.distance} ・ <span style={{ color: warm.orange }}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : ' - '}</span></div>
-                            )}
+                            {aiSuggestion.targetPlace && <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>{aiSuggestion.targetPlace.distance} ・ <span style={{ color: warm.orange }}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : ' - '}</span></div>}
                             <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{ color: "#6B5D52" }}>{aiSuggestion.reason}</div>
-                            
-                            {/* 關鍵修改：優先使用 targetPlace 導航，確保精確度 */}
-                            <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.targetPlace || aiSuggestion?.keyword || "")}>{t.goNav}</PrimaryButton>
+                            <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.keyword || aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
                           </motion.div>
                         )}
                         <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}><div className="text-sm opacity-60 font-medium">{t.manualSearchPrefix}</div><div className="text-sm opacity-90"><span className="underline font-bold" style={{ textUnderlineOffset: 3 }}>{manualSearchQuery}</span></div></motion.button>
