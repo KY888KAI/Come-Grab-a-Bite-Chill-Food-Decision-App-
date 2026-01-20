@@ -76,11 +76,11 @@ const TRANSLATIONS = {
     expanding: "正在幫您看遠一點的地方...",
     fallbackMessage: "找不到 100% 符合的，\n這幾家也不錯：",
     notFound: "這裡暫時沒有合適的店，\n試試別的條件？",
-    filtering: "主廚正在為您精選菜單...", // 去 AI 化文案
-    aiThinking: "AI 大廚正在思考...", // 保留給第二層
+    filtering: "主廚正在為您精選菜單...", 
+    aiThinking: "AI 大廚正在思考...",
     aiRetry: "還是不滿意？再試一次",
-    aiHelp: "都不滿意？交給主廚決定", // 更像人話
-    aiTag: "主廚精選", // 去 AI 化
+    aiHelp: "都不滿意？交給主廚決定",
+    aiTag: "主廚精選", 
     goNav: "出發去吃！ →",
     manualSearch: "還是沒看到想吃的？",
     manualSearchPrefix: "在地圖搜尋",
@@ -130,11 +130,11 @@ const TRANSLATIONS = {
     expanding: "Looking a bit further...",
     fallbackMessage: "No perfect match, but these are good:",
     notFound: "No suitable places found here.\nTry different options?",
-    filtering: "Chef is picking the best spots...",
+    filtering: "Picking the best spots for you...",
     aiThinking: "AI Chef is thinking...",
     aiRetry: "Not happy? Try again",
-    aiHelp: "Let Chef decide",
-    aiTag: "Chef's Choice",
+    aiHelp: "Let AI Chef decide for you",
+    aiTag: "AI Recommendation",
     goNav: "Let's Go! →",
     manualSearch: "Still not what you want?",
     manualSearchPrefix: "Search on Maps",
@@ -717,14 +717,14 @@ export default function App() {
   const tags = derived.tags;
   // const style = budget === "expensive" ? "rich" : "light"; // backend logic handles this
 
-  // 搜尋邏輯：後端 API 專用關鍵字 (廣泛，確保抓到資料)
+  // 3. 搜尋邏輯重構：後端 API 專用關鍵字 (廣泛，確保抓到資料)
   const backendMapsQuery = useMemo(() => {
     if (hunger === "full") return "restaurant";
     if (hunger === "snack") return "snack";
     return "food"; 
   }, [hunger]);
 
-  // 手動搜尋關鍵字優化：邏輯修正 (預算優先)
+  // 4. 手動搜尋關鍵字優化：口語短句 (for 顯示 & 手動連結)
   const manualSearchQuery = useMemo(() => {
     if (budget === "expensive") return "找間精緻好料"; // 預算優先
     if (budget === "cheap" && hunger === "snack") return "尋覓解饞小吃"; // 便宜且解饞
@@ -855,9 +855,24 @@ export default function App() {
           finalIndices = [];
         }
 
-        const aiSelectedPlaces = rawPlaces.filter((_, index) => finalIndices.includes(index));
+        // Logic Change: Calculate selected and others to preserve full list
+        const selected: Place[] = [];
+        const others: Place[] = [];
+        // Map distance to all places first
+        const allPlacesWithDist = rawPlaces.map((p) => {
+            const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
+            return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: currentStyle, hunger: hunger, speed: speed };
+        });
 
-        if (aiSelectedPlaces.length === 0) {
+        allPlacesWithDist.forEach((p, i) => {
+            if (finalIndices.includes(i)) selected.push(p);
+            else others.push(p);
+        });
+
+        // 排序 others (按距離)
+        others.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
+
+        if (selected.length === 0) {
           // AI 覺得都不行 (嚴格過濾後)
           if (radius < 5000 && retryCount < 1) { 
              stopProgress();
@@ -865,23 +880,11 @@ export default function App() {
              searchPlacesWithRipple(radius * 2, retryCount + 1);
              return;
           } else {
-             // 真的都找不到，AI 建議回傳空值，啟動前端的「fallback」
-             // 但我們現在已經把邏輯移到後端了，如果後端說空，就是真的空
-             // 這裡做一個最後的評分排序顯示，但不再做笨拙的關鍵字過濾，因為後端已經篩過了
-             // 如果連後端都篩不到，代表這附近真的沒有符合「犒賞」的店
+             // Fallback: Use all places (sorted by rating usually better for fallback)
+             // 修正：這裡不 slice 了，完整保留，解決 AI 大廚重複問題
+             const fallbackPlaces = allPlacesWithDist.sort((a, b) => (b.rating || 0) - (a.rating || 0));
              
-             // 策略：顯示評分最高的，但給出提示
-             const fallbackPlaces = rawPlaces
-               .sort((a, b) => (b.rating || 0) - (a.rating || 0)); // 保留所有資料，不 slice
-             
-             const placesWithDist = fallbackPlaces.map((p) => {
-               const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
-               return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: currentStyle, hunger: hunger, speed: speed };
-             });
-             
-             placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
-
-             setRealPlaces(placesWithDist); // 存入完整資料
+             setRealPlaces(fallbackPlaces); // 存入完整資料
              setApiError(t.fallbackMessage); 
              setSearchProgress(100);
              setIsRealLoading(false);
@@ -889,14 +892,10 @@ export default function App() {
           }
         }
 
-        const placesWithDist = aiSelectedPlaces.map((p) => {
-          const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
-          return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: currentStyle, hunger: hunger, speed: speed };
-        });
+        // Normal Path: Selected first, then others
+        const sortedPlaces = [...selected, ...others];
 
-        placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
-
-        setRealPlaces(placesWithDist); // 存入完整資料
+        setRealPlaces(sortedPlaces); // 存入完整資料
         setSearchProgress(100);
         setIsRealLoading(false);
       }
@@ -1058,7 +1057,8 @@ export default function App() {
     if (hiddenCandidates.length > 0) {
         targetPlace = hiddenCandidates[Math.floor(Math.random() * hiddenCandidates.length)];
     } else {
-        // Fallback: pick from visible if no hidden
+        // Fallback: pick from visible if no hidden (should prevent infinite loop if realPlaces > 3)
+        // But with fix, realPlaces should be > 3 (up to 20), so hiddenCandidates should have items.
         targetPlace = realPlaces.length > 0 ? realPlaces[Math.floor(Math.random() * realPlaces.length)] : null;
     }
 
@@ -1239,13 +1239,13 @@ export default function App() {
                       </div>
                     )}
 
-                    {!isRealLoading && apiError && (
+                    {!isRealLoading && apiError && visiblePlaces.length === 0 && (
                       <div className="py-8 text-center text-gray-500 text-sm whitespace-pre-line">
                         {apiError}
                       </div>
                     )}
 
-                    {/* 有資料時顯示：根據是否有 fallbackMessage 來決定是否顯示提示標題 */}
+                    {/* BUG FIX: 修正提示字重複顯示問題 */}
                     {!isRealLoading && visiblePlaces.length > 0 && apiError && (
                       <div className="text-center text-xs text-orange-400 font-bold mb-2 whitespace-pre-line">
                         {apiError}
