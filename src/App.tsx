@@ -74,13 +74,13 @@ const TRANSLATIONS = {
     recommendTitle: "附近可以吃什麼",
     searching: "正在掃描附近美食...",
     expanding: "正在幫您看遠一點的地方...",
-    fallbackMessage: "找不到 100% 符合的，這幾家也不錯：", // 修改：單行
+    fallbackMessage: "找不到 100% 符合的，這幾家也不錯：", 
     notFound: "這裡暫時沒有合適的店，\n試試別的條件？",
-    filtering: "主廚正在為您精選菜單...", 
-    aiThinking: "AI 大廚正在思考...", 
+    filtering: "正在為您精選最佳餐廳...", // 修正：與「掃描」一致，去人設化
+    aiThinking: "AI 大廚正在思考...", // 保留：大招狀態
     aiRetry: "還是不滿意？再試一次",
-    aiHelp: "都不滿意？交給主廚決定",
-    aiTag: "主廚精選", 
+    aiHelp: "都不滿意？交給 AI 大廚決定", // 修正：恢復 AI 大廚稱號
+    aiTag: "AI 大廚精選", // 修正：恢復 AI 大廚稱號
     goNav: "出發去吃！ →",
     manualSearch: "還是沒看到想吃的？",
     manualSearchPrefix: "在地圖搜尋",
@@ -128,13 +128,13 @@ const TRANSLATIONS = {
     recommendTitle: "What's Nearby",
     searching: "Scanning nearby spots...",
     expanding: "Looking a bit further...",
-    fallbackMessage: "No perfect match, but these are good:", // Single line
+    fallbackMessage: "No perfect match, but these are good:", 
     notFound: "No suitable places found here.\nTry different options?",
     filtering: "Picking the best spots for you...",
     aiThinking: "AI Chef is thinking...",
     aiRetry: "Not happy? Try again",
-    aiHelp: "Let AI Chef decide for you",
-    aiTag: "AI Recommendation",
+    aiHelp: "Not happy? Let AI Chef decide",
+    aiTag: "AI Chef's Choice",
     goNav: "Let's Go! →",
     manualSearch: "Still not what you want?",
     manualSearchPrefix: "Search on Maps",
@@ -344,15 +344,15 @@ function useLocalStorageLog() {
   return { log, setLog } as const;
 }
 
-// 修改：放大字體至 13px，增加 padding
+// 修改：淺橘底實心樣式 (PillButton 風格)，統一視覺
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
       className="inline-flex items-center rounded-full px-2.5 py-1 font-medium tracking-wide whitespace-nowrap"
       style={{
-        background: "rgba(255, 211, 106, 0.15)", 
-        color: "#6B5D52", 
-        border: "none", 
+        background: "rgba(255, 211, 106, 0.15)", // 淺橘色背景
+        color: "#6B5D52", // 深色文字
+        border: "none", // 移除邊框，改為實心風格
         fontSize: "13px" // 視覺修正
       }}
     >
@@ -454,7 +454,7 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
             )}
           </div>
           <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-          
+          {/* BUG FIX: 改回 flex-wrap 且限制數量，避免與左滑刪除衝突 */}
           <div className="flex flex-wrap gap-1.5 w-full mt-1">
             {item.tags?.slice(0, 3).map((t) => (
               <Tag key={t}>{t}</Tag>
@@ -933,6 +933,7 @@ export default function App() {
 
   function goHome() {
     setRealPlaces([]);
+    setAiSuggestion(null); // BUG FIX
     resetFlow();
     setScreen("home");
   }
@@ -945,6 +946,7 @@ export default function App() {
     }
     if (screen === "recommend") {
       setRealPlaces([]);
+      setAiSuggestion(null); // BUG FIX
       if (isRandomMode) return goHome();
       return setScreen("choose");
     }
@@ -955,6 +957,7 @@ export default function App() {
 
   function startDecision() {
     setRealPlaces([]);
+    setAiSuggestion(null); // BUG FIX
     resetFlow();
     setIsRandomMode(false);
     setScreen("choose");
@@ -978,6 +981,7 @@ export default function App() {
 
   function handleRandomClick() {
     setIsRandomizing(true);
+    setAiSuggestion(null); // BUG FIX
     setTimeout(() => {
       randomizeAll();
       setIsRandomizing(false);
