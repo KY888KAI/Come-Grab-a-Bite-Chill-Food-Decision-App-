@@ -63,7 +63,8 @@ const TRANSLATIONS = {
 const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" {...props} stroke={color} strokeWidth={strokeWidth} style={{ minWidth: size, minHeight: size }}>{children}</svg>);
 const LucideRotateCcw = (p: any) => <Icon {...p}><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></Icon>;
 const LucideHistory = (p: any) => <Icon {...p}><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /><polyline points="12 6 12 12 16 14" /></Icon>;
-const LucideSparkles = (p: any) => <Icon {...p}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z" /></Icon>;
+// FIX: 使用標準 Sparkles 路徑解決破圖問題
+const LucideSparkles = (p: any) => <Icon {...p}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" /><path d="M20 3v4" /><path d="M24 1v2" /><path d="M1 14v2" /></Icon>;
 const LucideTrash2 = (p: any) => <Icon {...p}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></Icon>;
 const LucidePin = (p: any) => <Icon {...p}><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" /></Icon>;
 const LucideHome = (p: any) => <Icon {...p}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>;
@@ -140,9 +141,12 @@ function useLocalStorageLog() {
   return { log, setLog } as const;
 }
 
-const Tag = ({ children }: { children: React.ReactNode }) => (
-  <span className="inline-flex items-center rounded-full px-2.5 py-1 font-medium tracking-wide whitespace-nowrap" style={{ background: "rgba(255, 211, 106, 0.15)", color: "#6B5D52", fontSize: "13px" }}>{children}</span>
+// FIX: 調整 Tag 預設樣式，使用 flex-shrink-0 確保不被擠壓，但我們會在外面調整 gap
+const Tag = ({ children, compact }: { children: React.ReactNode, compact?: boolean }) => (
+  // FIX: 新增 compact 模式 (用於列表)，減少 padding 和字體大小，確保單行塞得下
+  <span className={`inline-flex items-center rounded-full font-medium tracking-wide whitespace-nowrap ${compact ? 'px-1.5 py-0.5 text-xs' : 'px-2.5 py-1 text-[13px]'}`} style={{ background: "rgba(255, 211, 106, 0.15)", color: "#6B5D52" }}>{children}</span>
 );
+
 const ProgressBar = ({ progress }: { progress: number }) => (
   <div className="w-full max-w-[120px] h-1 bg-orange-100 rounded-full overflow-hidden mt-3"><motion.div className="h-full bg-orange-400" initial={{ width: 0 }} animate={{ width: `${progress}%` }} transition={{ duration: 0.5, ease: "easeInOut" }} /></div>
 );
@@ -194,7 +198,10 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease, onTeaseComple
         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
           <div className="flex justify-between items-center mb-1"><div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>{item.isPinned && <LucidePin size={14} color={warm.orange} />}</div>
           <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-          <div className="flex flex-nowrap items-center gap-1.5 w-full mt-1 overflow-hidden">{item.tags?.slice(0, 3).map((t: string) => (<div key={t} className="shrink-0"><Tag>{t}</Tag></div>))}</div>
+          {/* FIX: 恢復 flex-nowrap，但減少 gap 並使用 compact Tag 確保不被卡掉 */}
+          <div className="flex flex-nowrap items-center gap-1 w-full mt-1 overflow-hidden">
+            {item.tags?.slice(0, 3).map((t: string) => (<div key={t} className="shrink-0"><Tag compact>{t}</Tag></div>))}
+          </div>
         </div>
       </motion.div>
     </div>
@@ -424,12 +431,12 @@ export default function App() {
                       <><div className="pt-2 pb-2"><motion.button whileTap={{ scale: 0.98 }} onClick={callAi} disabled={isAiLoading} className="w-full rounded-2xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)", border: "1px dashed rgba(255,159,94,0.4)", color: warm.text }}>{isAiLoading ? <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl"><LucideSparkles size={20} color={warm.orange} /></span><span className="font-bold text-sm">{t.aiThinking}</span></div> : <div className="text-sm font-bold flex items-center justify-center gap-2" style={{ letterSpacing: "0.03em" }}><LucideSparkles size={16} color={warm.orange} /> {aiSuggestion ? t.aiRetry : t.aiHelp}</div>}</motion.button></div>
                         {aiSuggestion && (
                           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl p-5 mb-4 text-left" style={{ background: "rgba(255,255,255,0.9)", border: `1px solid ${warm.orange}`, boxShadow: warm.shadowActive }}>
-                            <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider flex items-center gap-1"><LucideSparkles size={12} /> {t.aiTag}</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
+                            {/* FIX: 將 AI 大廚精選的字體放大到 text-sm，保持 font-bold 但視覺上更和諧 */}
+                            <div className="flex items-center justify-between mb-2"><div className="text-sm font-bold text-orange-500 tracking-wider flex items-center gap-1"><LucideSparkles size={14} /> {t.aiTag}</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
                             <div className="text-lg font-bold mb-1" style={{ color: warm.text }}>{aiSuggestion.dish}</div>
                             {aiSuggestion.targetPlace && <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>{aiSuggestion.targetPlace.distance} ・ <span style={{ color: warm.orange }}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : ' - '}</span></div>}
                             <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{ color: "#6B5D52" }}>{aiSuggestion.reason}</div>
                             
-                            {/* 按鈕行為修改：如果只有 keyword (沒 targetPlace)，則是「標籤導航搜尋」模式 */}
                             <PrimaryButton onClick={() => {
                                 if (aiSuggestion.targetPlace) {
                                     handleStartNav(aiSuggestion.targetPlace);
