@@ -90,6 +90,7 @@ const fetchGeminiFilter = async (candidates: Place[], userTags: string[], logicT
   return (parsed.ids || []) as number[];
 };
 
+// --- Utilities ---
 function clamp(n: number, a: number, b: number) { return Math.min(b, Math.max(a, n)); }
 function nowISO() { return new Date().toISOString(); }
 function fmtDate(iso: string) {
@@ -353,7 +354,7 @@ export default function App() {
       const hidden = realPlaces.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
       const target = hidden.length ? hidden[Math.floor(Math.random() * hidden.length)] : (realPlaces.length ? realPlaces[Math.floor(Math.random() * realPlaces.length)] : null);
       try {
-          const res = await fetch(BACKEND_GEMINI_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "suggestion", prompt: target ? `推薦${target.name}，原因30字內` : `附近沒推薦的，給個通用建議30字內`, language: navigator.language }) });
+          const res = await fetch(BACKEND_GEMINI_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "suggestion", prompt: target ? `推薦「${target.name}」。請給出一個推薦理由(30字內)。回傳JSON格式：{ "dish": "${target.name}", "reason": "推薦理由" }` : `附近沒推薦的。請給出一個通用建議(30字內)與搜尋關鍵字。回傳JSON格式：{ "dish": "通用建議標題", "reason": "建議內容", "keyword": "搜尋關鍵字" }`, language: navigator.language }) });
           const data = await res.json();
           let sg = data.dish ? data : JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, "").replace(/```/g, "") || "{}");
           if (target) sg.targetPlace = target;
