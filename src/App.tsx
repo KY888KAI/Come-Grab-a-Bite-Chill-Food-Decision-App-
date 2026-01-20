@@ -19,11 +19,11 @@ const TRANSLATIONS = {
     next: "下一步",
     finish: "完成",
     recommendTitle: "附近可以吃什麼",
-    searching: "正在挑選最佳餐廳...", 
-    expanding: "附近選擇較少，正在擴大搜尋範圍...", 
-    fallbackMessage: "附近找不到完全符合條件的店，\n這些是不錯的替代選擇：", 
-    notFound: "附近真的太荒涼了，找不到餐廳 QQ",
-    aiThinking: "AI 大廚正在思考...",
+    searching: "正在掃描附近店家...", 
+    expanding: "正在幫您看遠一點的地方...", // 修改文案
+    fallbackMessage: "找不到 100% 符合的，\n這幾家也不錯：", // 修改文案：保底
+    notFound: "這裡暫時沒有合適的店，\n試試別的條件？", // 修改文案：真的沒資料
+    aiThinking: "AI 大廚正在挑剔評分...", // 修改文案：配合進度
     aiRetry: "還是不滿意？再試一次",
     aiHelp: "都不滿意？讓 AI 大廚幫你挑",
     aiTag: "AI 專屬推薦",
@@ -72,11 +72,11 @@ const TRANSLATIONS = {
     next: "Next",
     finish: "Done",
     recommendTitle: "What's Nearby",
-    searching: "Picking the best spots...",
-    expanding: "Expanding search area...",
-    fallbackMessage: "Couldn't find perfect matches,\nhere are some good alternatives:",
-    notFound: "No places found even after expanding search.",
-    aiThinking: "AI Chef is thinking...",
+    searching: "Scanning nearby spots...",
+    expanding: "Looking a bit further...",
+    fallbackMessage: "No perfect match, but these are good:",
+    notFound: "No suitable places found here.\nTry different options?",
+    aiThinking: "AI Chef is being picky...",
     aiRetry: "Not happy? Try again",
     aiHelp: "Let AI Chef decide for you",
     aiTag: "AI Recommendation",
@@ -116,7 +116,7 @@ function useLanguage() {
   return TRANSLATIONS[langCode];
 }
 
-const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (
+const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
     width={size} 
@@ -134,14 +134,14 @@ const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ..
   </svg>
 );
 
-const LucideRotateCcw = (props: any) => (
+const LucideRotateCcw = (props) => (
   <Icon {...props}>
     <polyline points="1 4 1 10 7 10" />
     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
   </Icon>
 );
 
-const LucideHistory = (props: any) => (
+const LucideHistory = (props) => (
   <Icon {...props}>
     <polyline points="1 4 1 10 7 10" />
     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
@@ -149,68 +149,16 @@ const LucideHistory = (props: any) => (
   </Icon>
 );
 
-const LucideTrash2 = (props: any) => <Icon {...props}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></Icon>;
-const LucidePin = (props: any) => <Icon {...props}><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" /></Icon>;
-const LucideHome = (props: any) => <Icon {...props}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>;
-const LucideX = (props: any) => <Icon {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
-const LucideChevronLeft = (props: any) => <Icon {...props}><path d="m15 18-6-6 6-6" /></Icon>;
+const LucideTrash2 = (props) => <Icon {...props}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></Icon>;
+const LucidePin = (props) => <Icon {...props}><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" /></Icon>;
+const LucideHome = (props) => <Icon {...props}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>;
+const LucideX = (props) => <Icon {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
+const LucideChevronLeft = (props) => <Icon {...props}><path d="m15 18-6-6 6-6" /></Icon>;
 
 const LS_KEY = "whatnow_energy_log_v2"; 
 const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; 
 const BACKEND_API_URL = "/api/places"; 
 const BACKEND_GEMINI_URL = "/api/gemini";
-
-type Temp = "light" | "rich"; 
-type Hunger = "full" | "snack"; 
-type Speed = "fast" | "sit";
-type Style = "light" | "rich";
-type Budget = "cheap" | "expensive";
-
-type Screen = "home" | "choose" | "recommend" | "energy" | "log";
-
-type Place = {
-  id: string;
-  name: string;
-  type?: Temp | null;
-  style?: Style;
-  hunger?: Hunger | null;
-  speed?: Speed | null;
-  price?: "budget" | "mid";
-  priceLevel?: string;
-  queryKeyword?: string; 
-  distance: string; 
-  distanceVal?: number;
-  lat?: number;
-  lng?: number;
-  googlePlaceId?: string;
-  rating?: number;
-  userRatingsTotal?: number;
-  openNow?: boolean;
-};
-
-type LogEntry = {
-  id: string;
-  at: string;
-  tags: string[];
-  choiceText: string;
-  isCategory?: boolean;
-  isPinned?: boolean; 
-  sig?: {
-    warmth: number; 
-    mode: "satisfied" | "stable" | "chaos";
-    temp: Temp | null;
-    hunger: Hunger | null;
-    speed: Speed | null;
-    richness: number;
-  };
-};
-
-type AiSuggestion = {
-  dish: string;
-  reason: string;
-  targetPlace?: Place;
-  keyword?: string; 
-} | null;
 
 const warm = {
   bg: "#FAF9F6", 
@@ -225,9 +173,9 @@ const warm = {
   shadowActive: "0 6px 20px -4px rgba(255, 138, 61, 0.2)",
   highlight: "inset 0 1px 0 0 rgba(255, 255, 255, 0.6)",
   deleteRed: "#FF6B6B",
-} as const;
+};
 
-function clamp(n: number, a: number, b: number) {
+function clamp(n, a, b) {
   return Math.min(b, Math.max(a, n));
 }
 
@@ -235,7 +183,7 @@ function nowISO() {
   return new Date().toISOString();
 }
 
-function fmtDate(iso: string) {
+function fmtDate(iso) {
   const d = new Date(iso);
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
@@ -244,12 +192,12 @@ function fmtDate(iso: string) {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function groupLogsByDate(logs: LogEntry[], t: any) {
-  const groups: { title: string; type: 'pinned' | 'date'; items: LogEntry[] }[] = [];
-  const pinned: LogEntry[] = [];
-  const today: LogEntry[] = [];
-  const yesterday: LogEntry[] = [];
-  const older: LogEntry[] = [];
+function groupLogsByDate(logs, t) {
+  const groups = [];
+  const pinned = [];
+  const today = [];
+  const yesterday = [];
+  const older = [];
 
   const now = new Date();
   const todayStr = now.toDateString();
@@ -274,11 +222,11 @@ function groupLogsByDate(logs: LogEntry[], t: any) {
   return groups;
 }
 
-function deg2rad(deg: number) {
+function deg2rad(deg) {
   return deg * (Math.PI / 180);
 }
 
-function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
   const R = 6371; 
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
@@ -289,9 +237,9 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
   return R * c; 
 }
 
-function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }, t: any) {
+function computeTags(args, t) {
   const { temp, hunger, budget } = args;
-  const tags: string[] = [];
+  const tags = [];
     
   if (temp) tags.push(temp === "light" ? t.light : t.rich);
   if (hunger) tags.push(hunger === "full" ? t.full : t.snack);
@@ -301,7 +249,7 @@ function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: B
   return { tags };
 }
 
-function getGoogleMapsUrl(query: string, placeId?: string) {
+function getGoogleMapsUrl(query, placeId) {
   const encodedQuery = encodeURIComponent(query);
   if (placeId) {
     return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}&query_place_id=${placeId}`;
@@ -309,20 +257,16 @@ function getGoogleMapsUrl(query: string, placeId?: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
-function navigateToMap(url: string) {
-  const isInIframe = window.self !== window.top;
-  if (isInIframe) {
-    window.open(url, "_blank");
-  } else {
-    window.location.href = url;
-  }
+function navigateToMap(url) {
+  console.log("Navigating to:", url);
+  window.open(url, "_blank"); 
 }
 
 function useLocalStorageLog() {
-  const [log, setLog] = useState<LogEntry[]>(() => {
+  const [log, setLog] = useState(() => {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      return raw ? (JSON.parse(raw) as LogEntry[]) : [];
+      return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
     }
@@ -332,10 +276,10 @@ function useLocalStorageLog() {
       localStorage.setItem(LS_KEY, JSON.stringify(log));
     } catch { }
   }, [log]);
-  return { log, setLog } as const;
+  return { log, setLog };
 }
 
-function Tag({ children }: { children: React.ReactNode }) {
+function Tag({ children }) {
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 font-medium tracking-wide whitespace-nowrap"
@@ -351,7 +295,20 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTeaseComplete, t }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void; tease?: boolean; onTeaseComplete?: () => void, t: any }) {
+function ProgressBar({ progress }) {
+    return (
+        <div className="w-full max-w-[120px] h-1 bg-orange-100 rounded-full overflow-hidden mt-3">
+            <motion.div 
+                className="h-full bg-orange-400"
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+            />
+        </div>
+    );
+}
+
+function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTeaseComplete, t }) {
   const x = useMotionValue(0);
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
   const [isDragging, setIsDragging] = useState(false);
@@ -398,17 +355,10 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
         onDragEnd={(_, { offset }) => {
           setIsDragging(false);
           if (offset.x < -60) {
-            if (window.confirm(t.confirmDelete)) {
-                onDelete();
-            }
+             // 暫時關閉刪除確認，優化預覽體驗
+             onDelete();
           } else if (offset.x > 60) {
-            if (item.isPinned) {
-                 if (window.confirm(t.confirmPin)) {
-                     onPin();
-                 }
-            } else {
-                 onPin();
-            }
+             onPin();
           }
         }}
         onClick={() => {
@@ -431,8 +381,9 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
                 )}
             </div>
             <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-            <div className="flex flex-wrap gap-1 w-full">
-                {item.tags?.slice(0, 3).map((t) => (
+            {/* BUG FIX: 標籤排版修正 */}
+            <div className="flex flex-nowrap gap-1 w-full overflow-x-auto no-scrollbar mask-gradient-right">
+                {item.tags?.map((t) => (
                   <Tag key={t}>{t}</Tag>
                 ))}
             </div>
@@ -442,7 +393,7 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
   );
 }
 
-function PillButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void; }) {
+function PillButton({ active, children, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -462,8 +413,8 @@ function PillButton({ active, children, onClick }: { active: boolean; children: 
   );
 }
 
-function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longPressMs = 650 }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; subtle?: boolean; onLongPress?: () => void; longPressMs?: number; }) {
-  const tRef = useRef<number | null>(null);
+function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longPressMs = 650 }) {
+  const tRef = useRef(null);
   const longPressedRef = useRef(false);
 
   function clear() { if (tRef.current) { window.clearTimeout(tRef.current); tRef.current = null; } }
@@ -516,14 +467,6 @@ function TopBar({
   onOpenLog, 
   hasLog, 
   title 
-}: { 
-  screen: Screen;
-  isRandomMode: boolean;
-  onBack: () => void;
-  onGoHome: () => void;
-  onOpenLog: () => void;
-  hasLog: boolean;
-  title: string;
 }) {
   
   const btnClassName = "flex items-center justify-center w-10 h-10 rounded-xl backdrop-blur-md shadow-sm active:scale-95 transition-all";
@@ -536,7 +479,7 @@ function TopBar({
       color: "#FF9F5E" 
   };
 
-  const renderBtn = (onClick: () => void, icon: React.ReactNode) => (
+  const renderBtn = (onClick, icon) => (
       <button onClick={onClick} className={btnClassName} style={btnCustomStyle}>
           {icon}
       </button>
@@ -574,7 +517,7 @@ function TopBar({
   );
 }
 
-function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }: { mode?: "chaos" | "stable" | "satisfied"; temp?: Temp | null; richness?: number; size?: number; }) {
+function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }) {
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
   const jitter = mode === "chaos" ? 6 : 0;
@@ -594,9 +537,9 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   return (
     <div className="relative flex flex-col items-center justify-center">
         <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-           
+            
           <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
-           
+            
             <motion.div 
                 key="core-shape"
                 className="absolute inset-6" 
@@ -611,14 +554,14 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
                 transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} 
                 style={{ borderRadius: '48%', background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} 
             />
-           
+            
           <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
         </div>
     </div>
   );
 }
 
-function ProgressDots({ step, total, onStepClick }: { step: number; total: number; onStepClick: (idx: number) => void }) {
+function ProgressDots({ step, total, onStepClick }) {
   return (
     <div className="flex items-center justify-center gap-2 mt-4">
       {Array.from({ length: total }).map((_, i) => (
@@ -639,17 +582,17 @@ function ProgressDots({ step, total, onStepClick }: { step: number; total: numbe
 export default function App() {
   const t = useLanguage();
   const { log, setLog } = useLocalStorageLog();
-  const [screen, setScreen] = useState<Screen>("home");
+  const [screen, setScreen] = useState("home");
   const [chooseStep, setChooseStep] = useState(0);
   const totalChooseSteps = 3;
 
-  const [temp, setTemp] = useState<Temp | null>(null);
-  const [hunger, setHunger] = useState<Hunger | null>(null);
-  const [budget, setBudget] = useState<Budget | null>(null);
+  const [temp, setTemp] = useState(null);
+  const [hunger, setHunger] = useState(null);
+  const [budget, setBudget] = useState(null);
   const [richness, setRichness] = useState(0.5); 
-  const [speed, setSpeed] = useState<Speed | null>(null); 
+  const [speed, setSpeed] = useState(null); 
 
-  const pressTimer = useRef<number | null>(null);
+  const pressTimer = useRef(null);
   const [pressing, setPressing] = useState(false);
   const [isRandomizing, setIsRandomizing] = useState(false); 
     
@@ -678,43 +621,36 @@ export default function App() {
       try { localStorage.setItem(LS_SWIPE_COUNT_KEY, MAX_TEASE_COUNT.toString()); } catch {}
   };
 
-  const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion>(null);
+  const [aiSuggestion, setAiSuggestion] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  const [realPlaces, setRealPlaces] = useState<Place[]>([]);
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [realPlaces, setRealPlaces] = useState([]);
+  const [userLocation, setUserLocation] = useState(null);
   const [isRealLoading, setIsRealLoading] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState(null);
   const [searchRadius, setSearchRadius] = useState(1000); 
+
+  // 新增：搜尋進度狀態 (0-100)
+  const [searchProgress, setSearchProgress] = useState(0);
     
   const derived = useMemo(() => computeTags({ temp, hunger, budget }, t), [temp, hunger, budget, t]);
   const tags = derived.tags;
-  const style: Style = budget === "expensive" ? "rich" : "light";
+  const style = budget === "expensive" ? "rich" : "light";
   
-  const mapsQuery = useMemo(() => {
-    let queryParts = [];
-    
-    if (budget === "cheap") queryParts.push("cheap", "budget", "affordable");
-    if (budget === "expensive") queryParts.push("fancy", "fine dining", "upscale");
-    
-    if (temp === "light") queryParts.push("light", "healthy", "fresh");
-    if (temp === "rich") queryParts.push("rich flavor", "savory", "heavy");
-    
-    if (hunger === "full") queryParts.push("restaurant", "meal");
-    if (hunger === "snack") queryParts.push("snacks", "street food", "finger food");
-    
-    let finalParts = [];
-    if (budget === "cheap") finalParts.push("cheap");
-    if (budget === "expensive") finalParts.push("fancy");
-    if (temp === "light") finalParts.push("healthy");
-    if (temp === "rich") finalParts.push("savory");
-    if (hunger === "full") finalParts.push("restaurant");
-    if (hunger === "snack") finalParts.push("snacks");
-    
-    if (!hunger) finalParts.push("food");
-    
-    return finalParts.join(" ");
-  }, [temp, hunger, budget]);
+  // 3. 搜尋邏輯重構：後端 API 專用關鍵字 (廣泛，確保抓到資料)
+  const backendMapsQuery = useMemo(() => {
+    // 核心判斷：是「吃飽」還是「吃巧」？
+    if (hunger === "full") return "restaurant";
+    if (hunger === "snack") return "snack";
+    return "food"; // 沒選就搜食物
+  }, [hunger]);
+
+  // 4. 手動搜尋關鍵字優化：口語短句 (for 顯示 & 手動連結)
+  const manualSearchQuery = useMemo(() => {
+    if (hunger === "full") return "找間好餐廳";
+    if (hunger === "snack") return "尋覓解饞小吃";
+    return "探索附近美食";
+  }, [hunger]);
 
   const groupedLogs = useMemo(() => groupLogsByDate(log, t), [log, t]);
 
@@ -729,119 +665,81 @@ export default function App() {
     }
   }, []);
 
-  const searchPlacesWithRipple = async (radius: number, retryCount = 0) => {
-    if (!userLocation || !BACKEND_API_URL || !BACKEND_GEMINI_URL) return;
+  // 搜尋進度計時器
+  const progressInterval = useRef(null);
+
+  const startProgressCrawl = (start, end, durationMs) => {
+    if (progressInterval.current) clearInterval(progressInterval.current);
+    const stepTime = 100; // 每 100ms 更新一次
+    const steps = durationMs / stepTime;
+    const increment = (end - start) / steps;
+    
+    setSearchProgress(start);
+    let current = start;
+
+    progressInterval.current = setInterval(() => {
+        current += increment;
+        if (current >= end) {
+            current = end;
+            clearInterval(progressInterval.current);
+        }
+        setSearchProgress(current);
+    }, stepTime);
+  };
+
+  const stopProgress = () => {
+    if (progressInterval.current) clearInterval(progressInterval.current);
+  };
+
+  const searchPlacesWithRipple = async (radius, retryCount = 0) => {
+    // Note: In Preview, this will likely fail or do nothing unless we mock it.
+    if (!userLocation) return;
     
     setIsRealLoading(true);
     setApiError(null);
     setSearchRadius(radius);
 
-    const logicTags = [];
-    if (temp === 'light') logicTags.push("LIGHT");
-    if (temp === 'rich') logicTags.push("RICH");
-    if (budget === 'cheap') logicTags.push("CHEAP");
-    if (budget === 'expensive') logicTags.push("EXPENSIVE");
-    if (hunger === 'full') logicTags.push("FULL");
-    if (hunger === 'snack') logicTags.push("SNACK");
-
-    try {
-      const placesRes = await fetch(BACKEND_API_URL, { 
-        method: "POST", 
-        headers: { "Content-Type": "application/json" }, 
-        body: JSON.stringify({ 
-          lat: userLocation.lat, 
-          lng: userLocation.lng, 
-          query: mapsQuery,
-          language: navigator.language,
-          radius: radius 
-        }) 
-      });
-
-      if (!placesRes.ok) throw new Error(await placesRes.text());
-      const rawPlaces: Place[] = await placesRes.json();
-
-      if (rawPlaces.length === 0) {
-         if (radius < 5000) {
-             console.log(`[同心圓] ${radius}m 無結果，擴大至 ${radius * 2}m...`);
-             searchPlacesWithRipple(radius * 2, retryCount + 1);
-             return; 
-         } else {
-             setRealPlaces([]);
-             setApiError(t.notFound);
-             return;
-         }
-      }
-
-      if (rawPlaces.length > 0) {
-        const filterRes = await fetch(BACKEND_GEMINI_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            mode: "filter", 
-            candidates: rawPlaces,
-            userTags: tags,
-            logicTags: logicTags, 
-            language: navigator.language 
-          }) 
-        });
-
-        const filterData = await filterRes.json();
-        let finalIndices: number[] = [];
-        try {
-           const jsonText = filterData.candidates?.[0]?.content?.parts?.[0]?.text;
-           const parsed = JSON.parse(jsonText.replace(/```json/g, "").replace(/```/g, ""));
-           finalIndices = parsed.ids || [];
-        } catch (e) {
-           console.error("AI 解析失敗", e);
-           finalIndices = [];
-        }
-
-        const aiSelectedPlaces = rawPlaces.filter((_, index) => finalIndices.includes(index));
-        
-        if (aiSelectedPlaces.length === 0) {
-            if (radius < 5000) {
-                console.log(`[AI淘汰] ${radius}m 內無合格店家，擴大至 ${radius * 2}m...`);
-                searchPlacesWithRipple(radius * 2, retryCount + 1);
-                return;
-            } else {
-                const fallbackPlaces = rawPlaces
-                    .sort((a, b) => (b.rating || 0) - (a.rating || 0)) 
-                    .slice(0, 3);
-                
-                const placesWithDist = fallbackPlaces.map((p) => {
-                    const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
-                    return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
-                });
-                
-                placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
-
-                setRealPlaces(placesWithDist);
-                setApiError(t.fallbackMessage); 
-                setIsRealLoading(false);
-                return;
-            }
-        }
-
-        const placesWithDist = aiSelectedPlaces.map((p) => {
-            const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
-            return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: style, hunger: hunger, speed: speed };
-        });
-        
-        placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
-        
-        setRealPlaces(placesWithDist);
-        setIsRealLoading(false);
-      }
-
-    } catch (err: any) {
-      setApiError(`API Error: ${err.message}`);
-      setIsRealLoading(false);
+    // 2. 進度條邏輯
+    if (retryCount === 0) {
+        // 初始搜尋
+        startProgressCrawl(10, 40, 3000); // 3秒內爬到 40%
+    } else {
+        // 擴大搜尋中
+        startProgressCrawl(40, 60, 4000); // 4秒內爬到 60%
     }
+
+    // MOCKING for Preview
+    setTimeout(() => {
+        stopProgress();
+        
+        // 模擬擴大搜尋情境 (第一次失敗)
+        if (radius === 1000) {
+            console.log("Mock: Radius 1000m -> No results, expanding...");
+            searchPlacesWithRipple(2000, retryCount + 1);
+            return;
+        }
+
+        // 模擬 AI 思考 (第二次)
+        setIsRealLoading(false); // Google 階段結束
+        setSearchProgress(70); // 跳到 AI 階段
+        startProgressCrawl(70, 90, 1500); // 1.5秒爬到 90
+
+        // 模擬最終沒找到資料 (觸發 Not Found)
+        setTimeout(() => {
+            stopProgress();
+            setSearchProgress(100);
+            // 模擬真的沒資料的情境 (對應文案的情境A)
+            setApiError(t.notFound); 
+            setRealPlaces([]); 
+        }, 1500);
+
+    }, 2000);
   };
 
   useEffect(() => {
     if (realPlaces.length > 0 || apiError) {
         setIsRealLoading(false);
+        setSearchProgress(100);
     }
   }, [realPlaces, apiError]);
 
@@ -849,19 +747,27 @@ export default function App() {
     if (screen === "recommend" && userLocation) {
         setSearchRadius(1000); 
         searchPlacesWithRipple(1000);
+    } else if (screen === "recommend" && !userLocation) {
+        // Mock location for preview if not allowed
+        setUserLocation({ lat: 25.033, lng: 121.565 });
     }
-  }, [screen, userLocation, mapsQuery]); 
+  }, [screen, userLocation]); 
 
   const visiblePlaces = useMemo(() => realPlaces.slice(0, VISIBLE_COUNT), [realPlaces]);
 
   function resetFlow() {
     setChooseStep(0); setTemp(null); setHunger(null); setBudget(null); setRichness(0.5); setSpeed(null);
-    setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); 
+    setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); setSearchProgress(0);
     setIsRandomMode(false); 
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
-  function goHome() { resetFlow(); setScreen("home"); }
+  function goHome() { 
+      // 5. BUG FIX: 解決卡片殘留
+      setRealPlaces([]);
+      resetFlow(); 
+      setScreen("home"); 
+  }
 
   function goBack() {
     if (screen === "choose") {
@@ -870,6 +776,8 @@ export default function App() {
       return;
     }
     if (screen === "recommend") {
+        // 5. BUG FIX: 解決卡片殘留
+        setRealPlaces([]); 
         if (isRandomMode) return goHome();
         return setScreen("choose"); 
     }
@@ -879,6 +787,8 @@ export default function App() {
   }
 
   function startDecision() { 
+      // 5. BUG FIX: 解決卡片殘留
+      setRealPlaces([]);
       resetFlow(); 
       setIsRandomMode(false); 
       setScreen("choose"); 
@@ -910,7 +820,7 @@ export default function App() {
       }, 600);
   }
 
-  function handleBudgetSelect(b: Budget) {
+  function handleBudgetSelect(b) {
       setBudget(b);
       if (b === "cheap") {
           setRichness(0.3);
@@ -921,8 +831,8 @@ export default function App() {
       }
   }
 
-  function saveEnergy(choiceText: string, isCategory: boolean = false) {
-    const entry: LogEntry = {
+  function saveEnergy(choiceText, isCategory = false) {
+    const entry = {
       id: `e_${Date.now()}`,
       at: nowISO(),
       tags,
@@ -934,35 +844,36 @@ export default function App() {
     setLog((prev) => [entry, ...prev]);
   }
 
-  function togglePin(id: string) {
+  function togglePin(id) {
     markSwipeFullyLearned(); 
     setLog(prev => prev.map(item => item.id === id ? { ...item, isPinned: !item.isPinned } : item));
   }
 
-  function deleteLog(id: string) {
+  function deleteLog(id) {
     markSwipeFullyLearned(); 
     setLog(prev => prev.filter(item => item.id !== id));
   }
 
-  function handleStartNav(place: Place | string) {
+  function handleStartNav(place) {
     const name = typeof place === 'string' ? place : place.name;
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
     const url = getGoogleMapsUrl(name, placeId); 
-     
+      
     saveEnergy(name, false); 
     setScreen("energy");
     navigateToMap(url);
   }
 
   function handleSearchCategory() {
-    const url = getGoogleMapsUrl(mapsQuery);
-     
-    saveEnergy(`搜尋：${mapsQuery}`, true); 
+    // 4. 手動搜尋使用口語短句
+    const url = getGoogleMapsUrl(manualSearchQuery);
+      
+    saveEnergy(`搜尋：${manualSearchQuery}`, true); 
     setScreen("energy"); 
     navigateToMap(url);
   }
 
-  function handleReEat(entry: LogEntry) {
+  function handleReEat(entry) {
     let query = entry.choiceText || ""; 
     if (query.startsWith("搜尋：")) query = query.replace("搜尋：", "");
     const url = getGoogleMapsUrl(query);
@@ -970,76 +881,16 @@ export default function App() {
   }
 
   async function callGeminiChef() {
-    if (!BACKEND_GEMINI_URL) return alert("請先設定後端 Gemini API 網址！");
-    setIsAiLoading(true);
-
-    let targetPlace: Place | null = null;
-
-    const hiddenCandidates = realPlaces.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
-
-    if (hiddenCandidates.length > 0) {
-        targetPlace = hiddenCandidates[Math.floor(Math.random() * hiddenCandidates.length)];
-    } else {
-        targetPlace = null;
-    }
-
-    const userLang = navigator.language;
-    const isChinese = userLang.toLowerCase().includes("zh");
-    const langRule = isChinese 
-        ? "請堅持使用繁體中文 (Traditional Chinese)，絕對禁止出現簡體中文或中國大陸用語。" 
-        : `Please respond in ${userLang}.`;
-
-    let prompt = "";
-    if (targetPlace) {
-        prompt = `使用者想吃：${tags.join(', ')}。
-        推薦一家店叫「${targetPlace.name}」。
-        ${langRule}
-        請給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
-        同時請安撫使用者，這家店雖然可能不是完美的 100分，但絕對值得一試。
-        格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
-    } else {
-        prompt = `使用者想吃：${tags.join(', ')}。
-        附近已經沒有其他符合條件的推薦店家的了。
-        ${langRule}
-        請給出一個「通用的餐點建議」（例如：不如去便利商店買個關東煮？或是改吃水果？），語氣幽默一點。
-        並且提供一個「精確的搜尋關鍵字 (keyword)」，讓使用者點擊後能在 Google Maps 上搜到結果（例如："便利商店", "水果店", "速食"）。
-        回傳 JSON 格式：{ "dish": "通用建議標題", "reason": "一句話幽默建議(30字內)", "keyword": "精確搜尋關鍵字" }`;
-    }
-
-    try {
-      const response = await fetch(BACKEND_GEMINI_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            mode: "suggestion", 
-            prompt: prompt,
-            language: navigator.language 
-        })
-      });
-      const data = await response.json();
-        
-      let suggestion = null;
-      if (data.dish) {
-          suggestion = data;
-      } else if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-          const text = data.candidates[0].content.parts[0].text;
-          const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-          suggestion = JSON.parse(cleanText);
-      }
-
-      if (suggestion) {
-          if (targetPlace) {
-              suggestion.targetPlace = targetPlace;
-          }
-          setAiSuggestion(suggestion);
-      }
-
-    } catch (error) {
-      console.error("AI Error:", error);
-      alert("AI 腦力激盪中斷了，請再試一次");
-    } finally {
-      setIsAiLoading(false);
-    }
+     // Mocking AI response for preview
+     setIsAiLoading(true);
+     setTimeout(() => {
+         setIsAiLoading(false);
+         setAiSuggestion({
+             dish: "預覽模式範例：鹽酥雞",
+             reason: "雖然找不到 API，但這時候吃個鹽酥雞絕對不會錯！",
+             keyword: "鹽酥雞"
+         });
+     }, 2000);
   }
 
   function subtleTitle() {
@@ -1050,7 +901,7 @@ export default function App() {
     return t.subtitles.log;
   }
 
-  const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" } as const;
+  const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" };
     
   return (
     <div className="min-h-screen w-full flex items-start justify-center px-3" style={{ background: warm.bg, color: warm.text }}>
@@ -1146,19 +997,33 @@ export default function App() {
                   </div>
                     
                   <div className="mt-4 space-y-4">
-                    {isRealLoading && (
-                      <div className="py-8 text-center text-gray-400 animate-pulse text-sm">
-                          {t.searching}<br/>
-                          {searchRadius > 1000 && <span className="text-xs text-orange-400">({t.expanding}: {searchRadius}m)</span>}
+                    {/* 2. 進度條區塊 */}
+                    {(isRealLoading || searchProgress > 0 && searchProgress < 100) && (
+                      <div className="py-6 flex flex-col items-center justify-center">
+                          <div className="text-center text-sm font-medium animate-pulse" style={{color: warm.sub}}>
+                              {searchProgress < 70 ? (
+                                  searchRadius > 1000 ? t.expanding : t.searching
+                              ) : (
+                                  t.aiThinking
+                              )}
+                          </div>
+                          <ProgressBar progress={searchProgress} />
                       </div>
                     )}
-                     
-                    {apiError && (
+                      
+                    {!isRealLoading && apiError && (
                       <div className="py-8 text-center text-gray-500 text-sm whitespace-pre-line">
                         {apiError}
                       </div>
                     )}
-                     
+
+                    {/* 有資料時顯示：根據是否有 fallbackMessage 來決定是否顯示提示標題 */}
+                    {!isRealLoading && visiblePlaces.length > 0 && apiError && (
+                        <div className="text-center text-xs text-orange-400 font-bold mb-2 whitespace-pre-line">
+                            {apiError}
+                        </div>
+                    )}
+                      
                     {visiblePlaces.map((p) => {
                       return (
                         <motion.button 
@@ -1182,36 +1047,42 @@ export default function App() {
                         </motion.button>
                       );
                     })}
-                    <div className="pt-2 pb-2">
-                      <motion.button whileTap={{ scale: 0.98 }} onClick={callGeminiChef} disabled={isAiLoading} className="w-full rounded-2xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)", border: "1px dashed rgba(255,159,94,0.4)", color: warm.text }}>
-                        {isAiLoading ? (
-                          <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl">✨</span><span className="font-bold text-sm">{t.aiThinking}</span></div>
-                        ) : aiSuggestion ? (
-                            <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>↻</span> {t.aiRetry}</div>
-                        ) : (
-                          <>
-                            <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>✨</span> {t.aiHelp}</div>
-                          </>
-                        )}
-                      </motion.button>
-                    </div>
-                    {aiSuggestion && (
-                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl p-5 mb-4 text-left" style={{ background: "rgba(255,255,255,0.9)", border: `1px solid ${warm.orange}`, boxShadow: warm.shadowActive }}>
-                        <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider">✨ {t.aiTag}</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
-                        <div className="text-lg font-bold mb-1" style={{color: warm.text}}>{aiSuggestion.dish}</div>
-                        {aiSuggestion.targetPlace && (
-                            <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>
-                                {aiSuggestion.targetPlace.distance} ・ <span style={{color: warm.orange}}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : ' - '}</span>
+                    
+                    {/* 按鈕區域：當還在跑進度時隱藏按鈕，避免干擾 */}
+                    {!isRealLoading && searchProgress === 100 && (
+                        <>
+                            <div className="pt-2 pb-2">
+                              <motion.button whileTap={{ scale: 0.98 }} onClick={callGeminiChef} disabled={isAiLoading} className="w-full rounded-2xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)", border: "1px dashed rgba(255,159,94,0.4)", color: warm.text }}>
+                                {isAiLoading ? (
+                                  <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl">✨</span><span className="font-bold text-sm">{t.aiThinking}</span></div>
+                                ) : aiSuggestion ? (
+                                    <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>↻</span> {t.aiRetry}</div>
+                                ) : (
+                                  <>
+                                    <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>✨</span> {t.aiHelp}</div>
+                                  </>
+                                )}
+                              </motion.button>
                             </div>
-                        )}
-                        <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{color: "#6B5D52"}}>{aiSuggestion.reason}</div>
-                        <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.keyword || aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
-                      </motion.div>
+                            {aiSuggestion && (
+                              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl p-5 mb-4 text-left" style={{ background: "rgba(255,255,255,0.9)", border: `1px solid ${warm.orange}`, boxShadow: warm.shadowActive }}>
+                                <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider">✨ {t.aiTag}</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
+                                <div className="text-lg font-bold mb-1" style={{color: warm.text}}>{aiSuggestion.dish}</div>
+                                {aiSuggestion.targetPlace && (
+                                    <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>
+                                        {aiSuggestion.targetPlace.distance} ・ <span style={{color: warm.orange}}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : ' - '}</span>
+                                    </div>
+                                )}
+                                <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{color: "#6B5D52"}}>{aiSuggestion.reason}</div>
+                                <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.keyword || aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
+                              </motion.div>
+                            )}
+                            <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
+                              <div className="text-sm opacity-60 font-medium">{t.manualSearch}</div>
+                              <div className="text-sm opacity-90"><span className="underline font-bold" style={{textUnderlineOffset: 3}}>{t.manualSearchHint}</span></div>
+                            </motion.button>
+                        </>
                     )}
-                    <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
-                      <div className="text-sm opacity-60 font-medium">{t.manualSearch}</div>
-                      <div className="text-sm opacity-90"><span className="underline font-bold" style={{textUnderlineOffset: 3}}>{t.manualSearchHint}</span></div>
-                    </motion.button>
                   </div>
                 </motion.div>
               )}
@@ -1290,5 +1161,3 @@ export default function App() {
     </div>
   );
 }
-
-
