@@ -5,8 +5,6 @@ const LS_KEY = "whatnow_energy_log_v2";
 const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count";
 const BACKEND_API_URL = "/api/places";
 const BACKEND_GEMINI_URL = "/api/gemini";
-const MAX_TEASE_COUNT = 3; // FIXED: Added missing constant
-const TOTAL_CHOOSE_STEPS = 3; // FIXED: Added missing constant
 
 const warm = {
   bg: "#FAF9F6", text: "#595048", sub: "#9C968F", orange: "#FF9F5E", yellow: "#FFD97F",
@@ -228,15 +226,16 @@ export default function App() {
   const { log, setLog } = useLocalStorageLog();
   const [screen, setScreen] = useState<Screen>("home");
   const [chooseStep, setChooseStep] = useState(0);
+  const totalChooseSteps = 3;
   const [temp, setTemp] = useState<Temp | null>(null);
   const [hunger, setHunger] = useState<Hunger | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [richness, setRichness] = useState(0.5);
   const [speed, setSpeed] = useState<Speed | null>(null);
-  const pressTimer = useRef<number | null>(null);
   const [pressing, setPressing] = useState(false);
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [isRandomMode, setIsRandomMode] = useState(false);
+  const MAX_TEASE_COUNT = 3;
   const [swipeTeaseCount, setSwipeTeaseCount] = useState(() => { try { return parseInt(localStorage.getItem(LS_SWIPE_COUNT_KEY) || "0", 10); } catch { return 0; } });
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -269,6 +268,8 @@ export default function App() {
     setIsRealLoading(true); setApiError(null); setSearchRadius(radius);
     startProgress(retry === 0 ? 10 : 40, retry === 0 ? 40 : 60, retry === 0 ? 3000 : 4000);
 
+    const currentStyle: Style = budget === "expensive" ? "rich" : "light";
+
     try {
       const rawPlaces = await fetchGooglePlaces(userLocation.lat, userLocation.lng, backendMapsQuery, radius);
       if (rawPlaces.length === 0) {
@@ -284,14 +285,14 @@ export default function App() {
       const selected: Place[] = [], others: Place[] = [];
       const allWithDist = rawPlaces.map(p => {
          const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
-         const placeStyle = (budget === "expensive" ? "rich" : "light") as Style;
-         return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: placeStyle, hunger, speed };
+         return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: currentStyle, hunger, speed };
       });
       allWithDist.forEach((p, i) => finalIndices.includes(i) ? selected.push(p) : others.push(p));
       others.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
 
       if (selected.length === 0) {
         if (radius < 5000 && retry < 1) { stopProgress(); return handleSearch(radius * 2, retry + 1); }
+        // Fallback Logic
         let candidates = allWithDist;
         if (budget === 'expensive') {
            const expensive = allWithDist.filter(p => p.priceLevel && !['PRICE_LEVEL_INEXPENSIVE', 'PRICE_LEVEL_FREE'].includes(p.priceLevel));
@@ -380,7 +381,7 @@ export default function App() {
               )}
               {screen === "choose" && (
                 <motion.div key="choose" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
-                  <div className="text-xl mt-4 text-center font-bold">{t.stepTitle}</div><ProgressDots step={chooseStep} total={TOTAL_CHOOSE_STEPS} onStepClick={setChooseStep} />
+                  <div className="text-xl mt-4 text-center font-bold">{t.stepTitle}</div><ProgressDots step={chooseStep} total={totalChooseSteps} onStepClick={setChooseStep} />
                   <div className="mt-8 space-y-4">
                     {chooseStep === 0 && <><PillButton active={temp === "light"} onClick={() => setTemp("light")}>{t.light}</PillButton><PillButton active={temp === "rich"} onClick={() => setTemp("rich")}>{t.rich}</PillButton><div className="pt-4"><PrimaryButton onClick={() => setChooseStep(1)} disabled={!temp}>{t.next}</PrimaryButton></div></>}
                     {chooseStep === 1 && <><PillButton active={hunger === "full"} onClick={() => setHunger("full")}>{t.full}</PillButton><PillButton active={hunger === "snack"} onClick={() => setHunger("snack")}>{t.snack}</PillButton><div className="pt-4"><PrimaryButton onClick={() => setChooseStep(2)} disabled={!hunger}>{t.next}</PrimaryButton></div></>}
