@@ -454,10 +454,12 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
             )}
           </div>
           <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-          {/* BUG FIX: 改回 flex-wrap 且限制數量，避免與左滑刪除衝突 */}
-          <div className="flex flex-wrap gap-1.5 w-full mt-1">
+          {/* BUG FIX: 改為單行固定 (flex-nowrap) + 超出隱藏 (overflow-hidden)，避免換行破壞版面 */}
+          <div className="flex flex-nowrap items-center gap-1.5 w-full mt-1 overflow-hidden">
             {item.tags?.slice(0, 3).map((t) => (
-              <Tag key={t}>{t}</Tag>
+              <div key={t} className="shrink-0">
+                <Tag>{t}</Tag>
+              </div>
             ))}
           </div>
         </div>
