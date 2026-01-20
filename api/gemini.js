@@ -15,20 +15,22 @@ export default async function handler(req, res) {
   const { mode, prompt, candidates, userTags, logicTags = [], language = "zh-TW" } = req.body;
 
   const langInstruction = language.toLowerCase().includes("zh") 
-    ? "【語言鐵律 (Language Rule)】：你必須使用「繁體中文 (Traditional Chinese, Taiwan)」回答。絕對禁止出現簡體中文或中國大陸用語。"
+    ? "【語言鐵律】：你必須使用「繁體中文 (Traditional Chinese, Taiwan)」回答。絕對禁止出現簡體中文或中國大陸用語。"
     : `【Language Rule】: Please respond in ${language}.`;
 
   let finalPrompt = "";
 
   if (mode === "filter") {
     
+    // 將店家資料整理成 AI 好讀的格式
     const candidatesStr = candidates.map((p, i) => {
       const typesStr = p.types ? p.types.join(", ") : "未知類別";
-      return `${i}. [${p.name}] (評分:${p.rating}, 價位等級:${p.priceLevel || '無資料'}, 類別:${typesStr})`;
+      return `${i}. [${p.name}] (評分:${p.rating}, 評論數:${p.userRatingsTotal}, 價位:${p.priceLevel || '無資料'}, 類別:${typesStr})`;
     }).join("\n");
 
     const tagsStr = userTags.join(", "); 
 
+    // 解析邏輯標籤
     const isCheap = logicTags.includes("CHEAP");
     const isExpensive = logicTags.includes("EXPENSIVE");
     const isFull = logicTags.includes("FULL");
@@ -39,57 +41,49 @@ export default async function handler(req, res) {
     finalPrompt = `
       ${langInstruction}
 
-      你是挑剔的美食評審。使用者想找符合這些條件的餐廳：【${tagsStr}】。
+      你是一個極度挑剔、品味嚴格的美食評論家。你的任務是從候選名單中挑選出「最符合使用者需求」的 3 家店。
       
-      請從以下候選名單中，挑選出「最符合」的 3 家店。
+      【使用者需求標籤】：${tagsStr}
       
+      【全方位審查鐵律 (Iron Rules)】 - 你必須嚴格遵守，寧缺勿濫：
+
+      1. [預算維度 Budget]
+         ${isExpensive ? `- 使用者選了「犒賞自己 (Expensive)」：
+           - **絕對死刑 (Banned)**：任何形式的「小吃攤」、「路邊攤」、「便當店」、「麵線/肉羹/粥」、「連鎖速食(麥當勞等)」、「平價連鎖鍋貼」。即使它有 5.0 顆星，也必須淘汰！
+           - **合格標準**：必須是異國料理、餐酒館、居酒屋、精緻早午餐、牛排館等有「用餐體驗」的店。
+           - 若沒有明確價格標示，請根據店名和類別判斷氣氛。` : ''}
+         ${isCheap ? `- 使用者選了「隨便吃吃 (Cheap)」：
+           - **優先錄取**：高 CP 值的便當、麵攤、小吃、速食。
+           - **淘汰**：看起來需要服務費、或是名字聽起來很高級的法式/義式餐廳。` : ''}
+
+      2. [份量維度 Hunger]
+         ${isFull ? `- 使用者選了「吃飽 (Full)」：
+           - **絕對死刑**：咖啡廳 (除非有賣飯麵)、甜點店、麵包店、酒吧、純飲料店。
+           - **合格標準**：必須提供完整的一餐 (Main Course)。` : ''}
+         ${isSnack ? `- 使用者選了「解饞 (Snack)」：
+           - **優先錄取**：炸物、甜點、滷味、街頭小吃、麵包。
+           - **淘汰**：大份量的火鍋吃到飽、合菜餐廳、高價牛排館。` : ''}
+
+      3. [口味維度 Taste]
+         ${isLight ? `- 使用者選了「清淡 (Light)」：
+           - **絕對死刑**：麻辣鍋、鹹酥雞、燒烤、重油重鹹的熱炒、濃厚系拉麵、美式炸物。
+           - **優先錄取**：健康餐 (Poke)、壽司、清蒸料理、早午餐、沙拉、越南河粉。` : ''}
+         ${isRich ? `- 使用者選了「重口味 (Rich)」：
+           - **優先錄取**：咖哩、麻辣、泰式、韓式、炸物、燒烤、快炒。
+           - **淘汰**：健康水煮餐、清淡的粥、傳統三明治。` : ''}
+
       【候選名單】：
       ${candidatesStr}
 
-      【全方位邏輯審查規則 (0 失誤標準)】：
-
-      1. [營業時間鐵律]：
-         - 雖然名單應該都是營業中的，但請你再次把關。
-         - 如果店名明顯顯示現在不該營業（例如現在是半夜，但店名是「美而美早餐」），請淘汰。
-
-      2. [評分標準]：
-         - 原則上只錄取 **評分 4.0 以上** 的店家。
-         - 例外：如果該店極度符合使用者需求（例如半夜唯一開著的清粥小菜），且評分不低於 3.5，可以破例錄取。
-
-      3. [預算維度 Budget] (★ 關鍵修正：放寬標準)
-         ${isCheap ? `- 標籤含 CHEAP (隨便吃吃)：
-           - 嚴格鎖定 Price Level 1 (Inexpensive / 平價)。
-           - 如果沒有 Price Level 資料：請根據店名、類別判斷，必須是路邊攤、小吃店、便當店、平價連鎖速食。
-           - 絕對淘汰：看起來像需要服務費的餐廳、異國料理餐廳 (除非明顯是平價版)、居酒屋。` : ''}
-         ${isExpensive ? `- 標籤含 EXPENSIVE (犒賞自己)：
-           - 包含 Price Level 2 (Moderate), 3 (Expensive), 4 (Very Expensive)。也就是說，只要不是 Level 1 的平價店，都算。
-           - 重點在於「體驗」：即使是中價位 (Level 2)，只要評分高、氣氛好、是有質感的定食或火鍋，都算犒賞。
-           - 絕對淘汰：便當店、路邊攤、環境簡陋的小吃、手搖飲店。` : ''}
-
-      4. [份量維度 Hunger]
-         ${isFull ? `- 標籤含 FULL (吃飽)：必須是正餐類。禁止推薦 cafe, bakery, dessert_shop, bar。` : ''}
-         ${isSnack ? `- 標籤含 SNACK (解饞)：優先推薦小吃、點心。便利商店/超市為最後順位。` : ''}
-
-      5. [口味維度 Style]
-         ${isLight ? `- 標籤含 LIGHT (清淡點)：
-           - 黑名單：麻辣、爆炒、重慶、川菜、炭烤、烈火、油炸、肥腸、濃厚。
-           - 優先錄取：健康餐、清蒸、水煮、粥品、潤餅、涼麵、壽司、蒸餃。` : ''}
-         
-         ${isRich ? `- 標籤含 RICH (重口味)：
-           - 優先錄取：spicy, curry, barbecue, fried, fast_food, thai, mexican。` : ''}
-
-      6. [超商/量販店處理]：
-         - 除非使用者選「解饞」且附近真的沒餐廳，否則盡量不要推薦 convenience_store 或 supermarket。
-
       【最終輸出】：
-      - 如果所有店家都被淘汰，請直接回傳空的 ids 陣列 \`[]\`。
-      - 我們會根據空名單自動觸發「退而求其次」的保底機制。
-
-      請回傳 JSON 格式，包含一個 ids 陣列，裡面是選中的 3 家店的編號 (index)。
+      - 請回傳一個 JSON 物件，包含一個 "ids" 陣列，裡面是選中的 3 家店的編號 (index)。
+      - 如果所有店家都違反上述鐵律（例如選「犒賞自己」但全是路邊攤），請回傳空陣列 \`[]\`。我們寧可不推薦，也不要亂推薦。
+      
       格式範例：{ "ids": [0, 5, 12] }
       不要解釋，只要 JSON。
     `;
   } else {
+    // 針對 "AI 建議" 模式 (suggestion)
     finalPrompt = `
       ${langInstruction}
       ${prompt}
@@ -114,5 +108,3 @@ export default async function handler(req, res) {
     res.status(500).json({ error: "Failed to fetch from Gemini" });
   }
 }
-
-
