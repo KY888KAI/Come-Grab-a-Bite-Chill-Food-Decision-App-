@@ -1,5 +1,57 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
+
+// --- 型別定義 (TypeScript Interfaces) ---
+type Temp = "light" | "rich";
+type Hunger = "full" | "snack";
+type Speed = "fast" | "sit";
+type Budget = "cheap" | "expensive";
+type Style = "light" | "rich";
+type Screen = "home" | "choose" | "recommend" | "energy" | "log";
+
+interface Place {
+  id: string;
+  name: string;
+  type?: Temp | null;
+  style?: Style;
+  hunger?: Hunger | null;
+  speed?: Speed | null;
+  price?: "budget" | "mid";
+  priceLevel?: string;
+  queryKeyword?: string;
+  distance: string;
+  distanceVal?: number;
+  lat?: number;
+  lng?: number;
+  googlePlaceId?: string;
+  rating?: number;
+  userRatingsTotal?: number;
+  openNow?: boolean;
+}
+
+interface LogEntry {
+  id: string;
+  at: string;
+  tags: string[];
+  choiceText: string;
+  isCategory?: boolean;
+  isPinned?: boolean;
+  sig?: {
+    warmth: number;
+    mode: "satisfied" | "stable" | "chaos";
+    temp: Temp | null;
+    hunger: Hunger | null;
+    speed: Speed | null;
+    richness: number;
+  };
+}
+
+interface AiSuggestion {
+  dish: string;
+  reason: string;
+  targetPlace?: Place;
+  keyword?: string;
+}
 
 // --- 多語言字典 (i18n) ---
 const TRANSLATIONS = {
@@ -19,11 +71,11 @@ const TRANSLATIONS = {
     next: "下一步",
     finish: "完成",
     recommendTitle: "附近可以吃什麼",
-    searching: "正在掃描附近店家...", 
-    expanding: "正在幫您看遠一點的地方...", // 修改文案
-    fallbackMessage: "找不到 100% 符合的，\n這幾家也不錯：", // 修改文案：保底
-    notFound: "這裡暫時沒有合適的店，\n試試別的條件？", // 修改文案：真的沒資料
-    aiThinking: "AI 大廚正在挑剔評分...", // 修改文案：配合進度
+    searching: "正在掃描附近店家...",
+    expanding: "正在幫您看遠一點的地方...",
+    fallbackMessage: "找不到 100% 符合的，\n這幾家也不錯：",
+    notFound: "這裡暫時沒有合適的店，\n試試別的條件？",
+    aiThinking: "AI 大廚正在挑剔評分...",
     aiRetry: "還是不滿意？再試一次",
     aiHelp: "都不滿意？讓 AI 大廚幫你挑",
     aiTag: "AI 專屬推薦",
@@ -116,32 +168,32 @@ function useLanguage() {
   return TRANSLATIONS[langCode];
 }
 
-const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    {...props} 
-    stroke={color} 
-    strokeWidth={strokeWidth} 
-    style={{ minWidth: size, minHeight: size }} 
+const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+    stroke={color}
+    strokeWidth={strokeWidth}
+    style={{ minWidth: size, minHeight: size }}
   >
     {children}
   </svg>
 );
 
-const LucideRotateCcw = (props) => (
+const LucideRotateCcw = (props: any) => (
   <Icon {...props}>
     <polyline points="1 4 1 10 7 10" />
     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
   </Icon>
 );
 
-const LucideHistory = (props) => (
+const LucideHistory = (props: any) => (
   <Icon {...props}>
     <polyline points="1 4 1 10 7 10" />
     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
@@ -149,33 +201,33 @@ const LucideHistory = (props) => (
   </Icon>
 );
 
-const LucideTrash2 = (props) => <Icon {...props}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></Icon>;
-const LucidePin = (props) => <Icon {...props}><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" /></Icon>;
-const LucideHome = (props) => <Icon {...props}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>;
-const LucideX = (props) => <Icon {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
-const LucideChevronLeft = (props) => <Icon {...props}><path d="m15 18-6-6 6-6" /></Icon>;
+const LucideTrash2 = (props: any) => <Icon {...props}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></Icon>;
+const LucidePin = (props: any) => <Icon {...props}><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" /></Icon>;
+const LucideHome = (props: any) => <Icon {...props}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>;
+const LucideX = (props: any) => <Icon {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
+const LucideChevronLeft = (props: any) => <Icon {...props}><path d="m15 18-6-6 6-6" /></Icon>;
 
-const LS_KEY = "whatnow_energy_log_v2"; 
-const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count"; 
-const BACKEND_API_URL = "/api/places"; 
+const LS_KEY = "whatnow_energy_log_v2";
+const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count";
+const BACKEND_API_URL = "/api/places";
 const BACKEND_GEMINI_URL = "/api/gemini";
 
 const warm = {
-  bg: "#FAF9F6", 
-  text: "#595048", 
-  sub: "#9C968F", 
+  bg: "#FAF9F6",
+  text: "#595048",
+  sub: "#9C968F",
   orange: "#FF9F5E",
   yellow: "#FFD97F",
-  border: "1px solid rgba(255, 138, 61, 0.5)", 
-  borderSubtle: "1px solid rgba(255, 138, 61, 0.18)", 
+  border: "1px solid rgba(255, 138, 61, 0.5)",
+  borderSubtle: "1px solid rgba(255, 138, 61, 0.18)",
   borderAction: "1px solid rgba(255, 138, 61, 0.35)",
   shadow: "0 4px 12px -2px rgba(255, 159, 94, 0.1)",
   shadowActive: "0 6px 20px -4px rgba(255, 138, 61, 0.2)",
   highlight: "inset 0 1px 0 0 rgba(255, 255, 255, 0.6)",
   deleteRed: "#FF6B6B",
-};
+} as const;
 
-function clamp(n, a, b) {
+function clamp(n: number, a: number, b: number) {
   return Math.min(b, Math.max(a, n));
 }
 
@@ -183,7 +235,7 @@ function nowISO() {
   return new Date().toISOString();
 }
 
-function fmtDate(iso) {
+function fmtDate(iso: string) {
   const d = new Date(iso);
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
@@ -192,12 +244,12 @@ function fmtDate(iso) {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function groupLogsByDate(logs, t) {
-  const groups = [];
-  const pinned = [];
-  const today = [];
-  const yesterday = [];
-  const older = [];
+function groupLogsByDate(logs: LogEntry[], t: any) {
+  const groups: { title: string; type: 'pinned' | 'date'; items: LogEntry[] }[] = [];
+  const pinned: LogEntry[] = [];
+  const today: LogEntry[] = [];
+  const yesterday: LogEntry[] = [];
+  const older: LogEntry[] = [];
 
   const now = new Date();
   const todayStr = now.toDateString();
@@ -222,25 +274,25 @@ function groupLogsByDate(logs, t) {
   return groups;
 }
 
-function deg2rad(deg) {
+function deg2rad(deg: number) {
   return deg * (Math.PI / 180);
 }
 
-function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-  const R = 6371; 
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; 
+  return R * c;
 }
 
-function computeTags(args, t) {
+function computeTags(args: { temp: Temp | null; hunger: Hunger | null; budget: Budget | null }, t: any) {
   const { temp, hunger, budget } = args;
-  const tags = [];
-    
+  const tags: string[] = [];
+
   if (temp) tags.push(temp === "light" ? t.light : t.rich);
   if (hunger) tags.push(hunger === "full" ? t.full : t.snack);
   if (budget === "cheap") tags.push(t.cheap);
@@ -249,7 +301,7 @@ function computeTags(args, t) {
   return { tags };
 }
 
-function getGoogleMapsUrl(query, placeId) {
+function getGoogleMapsUrl(query: string, placeId?: string) {
   const encodedQuery = encodeURIComponent(query);
   if (placeId) {
     return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}&query_place_id=${placeId}`;
@@ -257,16 +309,20 @@ function getGoogleMapsUrl(query, placeId) {
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
-function navigateToMap(url) {
-  console.log("Navigating to:", url);
-  window.open(url, "_blank"); 
+function navigateToMap(url: string) {
+  const isInIframe = window.self !== window.top;
+  if (isInIframe) {
+    window.open(url, "_blank");
+  } else {
+    window.location.href = url;
+  }
 }
 
 function useLocalStorageLog() {
-  const [log, setLog] = useState(() => {
+  const [log, setLog] = useState<LogEntry[]>(() => {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      return raw ? JSON.parse(raw) : [];
+      return raw ? (JSON.parse(raw) as LogEntry[]) : [];
     } catch {
       return [];
     }
@@ -276,17 +332,17 @@ function useLocalStorageLog() {
       localStorage.setItem(LS_KEY, JSON.stringify(log));
     } catch { }
   }, [log]);
-  return { log, setLog };
+  return { log, setLog } as const;
 }
 
-function Tag({ children }) {
+function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 font-medium tracking-wide whitespace-nowrap"
       style={{
-        background: "rgba(255, 211, 106, 0.15)", 
+        background: "rgba(255, 211, 106, 0.15)",
         color: "#6B5D52",
-        border: "1px solid rgba(255, 138, 61, 0.2)", 
+        border: "1px solid rgba(255, 138, 61, 0.2)",
         fontSize: "11px"
       }}
     >
@@ -295,53 +351,53 @@ function Tag({ children }) {
   );
 }
 
-function ProgressBar({ progress }) {
-    return (
-        <div className="w-full max-w-[120px] h-1 bg-orange-100 rounded-full overflow-hidden mt-3">
-            <motion.div 
-                className="h-full bg-orange-400"
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
-            />
-        </div>
-    );
+function ProgressBar({ progress }: { progress: number }) {
+  return (
+    <div className="w-full max-w-[120px] h-1 bg-orange-100 rounded-full overflow-hidden mt-3">
+      <motion.div
+        className="h-full bg-orange-400"
+        initial={{ width: 0 }}
+        animate={{ width: `${progress}%` }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
+      />
+    </div>
+  );
 }
 
-function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTeaseComplete, t }) {
+function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTeaseComplete, t }: { item: LogEntry; onReEat: () => void; onPin: () => void; onDelete: () => void; tease?: boolean; onTeaseComplete?: () => void, t: any }) {
   const x = useMotionValue(0);
   const background = useTransform(x, [-100, 0, 100], [warm.deleteRed, "rgba(255,255,255,0)", warm.orange]);
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     if (tease) {
-        const controls = animate(x, [0, -60, -60, 0, 60, 60, 0], {
-            duration: 2.2,
-            ease: "easeInOut",
-            delay: 0.8, 
-            times: [0, 0.2, 0.35, 0.5, 0.65, 0.8, 1],
-            onComplete: () => {
-                if (onTeaseComplete) onTeaseComplete();
-            }
-        });
-        return () => controls.stop();
+      const controls = animate(x, [0, -60, -60, 0, 60, 60, 0], {
+        duration: 2.2,
+        ease: "easeInOut",
+        delay: 0.8,
+        times: [0, 0.2, 0.35, 0.5, 0.65, 0.8, 1],
+        onComplete: () => {
+          if (onTeaseComplete) onTeaseComplete();
+        }
+      });
+      return () => controls.stop();
     }
   }, [tease, x, onTeaseComplete]);
 
   return (
     <div className="relative mb-3 group">
-      <motion.div 
+      <motion.div
         className="absolute inset-0 rounded-3xl flex items-center justify-between px-6"
         style={{ background }}
       >
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
-           <LucidePin size={20} color="currentColor" strokeWidth={2} />
-           <span className="font-bold text-sm">{t.actionPin}</span>
+          <LucidePin size={20} color="currentColor" strokeWidth={2} />
+          <span className="font-bold text-sm">{t.actionPin}</span>
         </div>
 
         <div className="flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: 1 }}>
-           <span className="font-bold text-sm">{t.actionDelete}</span>
-           <LucideTrash2 size={20} color="currentColor" strokeWidth={2} />
+          <span className="font-bold text-sm">{t.actionDelete}</span>
+          <LucideTrash2 size={20} color="currentColor" strokeWidth={2} />
         </div>
       </motion.div>
 
@@ -350,50 +406,57 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
         style={{ x, border: warm.borderSubtle, background: "#FFFFFF", boxShadow: warm.shadow }}
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.7} 
+        dragElastic={0.7}
         onDragStart={() => setIsDragging(true)}
         onDragEnd={(_, { offset }) => {
           setIsDragging(false);
           if (offset.x < -60) {
-             // 暫時關閉刪除確認，優化預覽體驗
-             onDelete();
+            if (window.confirm(t.confirmDelete)) {
+              onDelete();
+            }
           } else if (offset.x > 60) {
-             onPin();
+            if (item.isPinned) {
+              if (window.confirm(t.confirmPin)) {
+                onPin();
+              }
+            } else {
+              onPin();
+            }
           }
         }}
         onClick={() => {
-            if (!isDragging) onReEat();
+          if (!isDragging) onReEat();
         }}
       >
         <div className="shrink-0 flex items-center justify-center" style={{ width: 88, height: 88 }}>
-          <EnergyCore 
-            mode={item.sig?.mode ?? "satisfied"} 
-            temp={item.sig?.temp} 
-            richness={item.sig?.richness ?? 0.5} 
-            size={88} 
+          <EnergyCore
+            mode={item.sig?.mode ?? "satisfied"}
+            temp={item.sig?.temp}
+            richness={item.sig?.richness ?? 0.5}
+            size={88}
           />
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 overflow-hidden">
-            <div className="flex justify-between items-center mb-1">
-                <div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>
-                {item.isPinned && (
-                    <LucidePin size={14} color={warm.orange} />
-                )}
-            </div>
-            <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-            {/* BUG FIX: 標籤排版修正 */}
-            <div className="flex flex-nowrap gap-1 w-full overflow-x-auto no-scrollbar mask-gradient-right">
-                {item.tags?.map((t) => (
-                  <Tag key={t}>{t}</Tag>
-                ))}
-            </div>
+          <div className="flex justify-between items-center mb-1">
+            <div className="text-xs font-medium tracking-wide" style={{ color: warm.sub }}>{fmtDate(item.at)}</div>
+            {item.isPinned && (
+              <LucidePin size={14} color={warm.orange} />
+            )}
+          </div>
+          <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
+          {/* BUG FIX: 標籤排版修正 */}
+          <div className="flex flex-nowrap gap-1 w-full overflow-x-auto no-scrollbar mask-gradient-right">
+            {item.tags?.map((t) => (
+              <Tag key={t}>{t}</Tag>
+            ))}
+          </div>
         </div>
       </motion.div>
     </div>
   );
 }
 
-function PillButton({ active, children, onClick }) {
+function PillButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void; }) {
   return (
     <button
       onClick={onClick}
@@ -401,9 +464,9 @@ function PillButton({ active, children, onClick }) {
       style={{
         border: active ? warm.border : warm.borderSubtle,
         background: active ? "#FFF8F3" : "rgba(255, 255, 255, 0.65)",
-        boxShadow: active 
-            ? `inset 0 1px 3px rgba(255,138,61,0.06), 0 2px 8px rgba(255,138,61,0.08)` 
-            : "0 2px 6px rgba(255, 138, 61, 0.05)",
+        boxShadow: active
+          ? `inset 0 1px 3px rgba(255,138,61,0.06), 0 2px 8px rgba(255,138,61,0.08)`
+          : "0 2px 6px rgba(255, 138, 61, 0.05)",
       }}
     >
       <div className="relative z-10 text-base flex items-center justify-center gap-2" style={{ color: active ? warm.orange : warm.text, fontWeight: active ? 600 : 500, letterSpacing: "0.03em" }}>
@@ -413,8 +476,8 @@ function PillButton({ active, children, onClick }) {
   );
 }
 
-function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longPressMs = 650 }) {
-  const tRef = useRef(null);
+function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longPressMs = 650 }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; subtle?: boolean; onLongPress?: () => void; longPressMs?: number; }) {
+  const tRef = useRef<number | null>(null);
   const longPressedRef = useRef(false);
 
   function clear() { if (tRef.current) { window.clearTimeout(tRef.current); tRef.current = null; } }
@@ -437,7 +500,7 @@ function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longP
   const subtleStyle = {
     background: "rgba(255, 255, 255, 0.7)",
     color: warm.text,
-    border: warm.borderSubtle, 
+    border: warm.borderSubtle,
     boxShadow: "0 2px 12px rgba(255, 138, 61, 0.08)",
   };
 
@@ -459,72 +522,80 @@ function PrimaryButton({ children, onClick, disabled, subtle, onLongPress, longP
   );
 }
 
-function TopBar({ 
-  screen, 
-  isRandomMode, 
-  onBack, 
-  onGoHome, 
-  onOpenLog, 
-  hasLog, 
-  title 
+function TopBar({
+  screen,
+  isRandomMode,
+  onBack,
+  onGoHome,
+  onOpenLog,
+  hasLog,
+  title
+}: {
+  screen: Screen;
+  isRandomMode: boolean;
+  onBack: () => void;
+  onGoHome: () => void;
+  onOpenLog: () => void;
+  hasLog: boolean;
+  title: string;
 }) {
-  
+
   const btnClassName = "flex items-center justify-center w-10 h-10 rounded-xl backdrop-blur-md shadow-sm active:scale-95 transition-all";
-  
+
   const btnCustomStyle = {
-      background: "rgba(255, 255, 255, 0.4)",
-      borderColor: "rgba(255, 138, 61, 0.35)", 
-      borderWidth: "1px",
-      borderStyle: "solid",
-      color: "#FF9F5E" 
+    background: "rgba(255, 255, 255, 0.4)",
+    borderColor: "rgba(255, 138, 61, 0.35)",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    color: "#FF9F5E"
   };
 
-  const renderBtn = (onClick, icon) => (
-      <button onClick={onClick} className={btnClassName} style={btnCustomStyle}>
-          {icon}
-      </button>
+  const renderBtn = (onClick: () => void, icon: React.ReactNode) => (
+    <button onClick={onClick} className={btnClassName} style={btnCustomStyle}>
+      {icon}
+    </button>
   );
 
   let leftBtn = null;
   let rightBtn = null;
 
   if (screen === 'home') {
-     if (hasLog) {
-         rightBtn = renderBtn(onOpenLog, <LucideHistory size={20} strokeWidth={1.75} />);
-     }
+    if (hasLog) {
+      rightBtn = renderBtn(onOpenLog, <LucideHistory size={20} strokeWidth={1.75} />);
+    }
   } else if (screen === 'choose') {
-     leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
-     rightBtn = renderBtn(onGoHome, <LucideX size={22} />);
+    leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
+    rightBtn = renderBtn(onGoHome, <LucideX size={22} />);
   } else if (screen === 'recommend') {
-     if (isRandomMode) {
-         leftBtn = renderBtn(onGoHome, <LucideHome size={20} />);
-     } else {
-         leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
-         rightBtn = renderBtn(onGoHome, <LucideX size={22} />);
-     }
-  } else if (screen === 'energy') {
-       leftBtn = renderBtn(onGoHome, <LucideHome size={20} />);
-  } else if (screen === 'log') {
+    if (isRandomMode) {
+      leftBtn = renderBtn(onGoHome, <LucideHome size={20} />);
+    } else {
       leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
+      rightBtn = renderBtn(onGoHome, <LucideX size={22} />);
+    }
+  } else if (screen === 'energy') {
+    leftBtn = renderBtn(onGoHome, <LucideHome size={20} />);
+  } else if (screen === 'log') {
+    leftBtn = renderBtn(onBack, <LucideChevronLeft size={24} />);
   }
 
   return (
     <div className="flex items-center justify-between gap-3 px-4 pt-6 pb-4 relative z-50">
-       <div className="w-10">{leftBtn}</div>
-       <div className="text-sm font-bold" style={{ color: warm.sub, letterSpacing: "0.05em" }}>{title}</div>
-       <div className="w-10 flex justify-end">{rightBtn}</div>
+      <div className="w-10">{leftBtn}</div>
+      <div className="text-sm font-bold" style={{ color: warm.sub, letterSpacing: "0.05em" }}>{title}</div>
+      <div className="w-10 flex justify-end">{rightBtn}</div>
     </div>
   );
 }
 
-function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }) {
+function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }: { mode?: "chaos" | "stable" | "satisfied"; temp?: Temp | null; richness?: number; size?: number; }) {
   const glow = mode === "chaos" ? 0.25 : mode === "stable" ? 0.45 : 0.75;
   const blurBase = mode === "chaos" ? 26 : mode === "stable" ? 34 : 42;
   const jitter = mode === "chaos" ? 6 : 0;
-    
+
   const palette = useMemo(() => {
-    if (temp === "rich") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," }; 
-    if (temp === "light") return { a: "rgba(255, 160, 130, ", b: "rgba(240, 248, 255, ", ring: "rgba(176, 224, 230, 0.5)", glowColor: "rgba(255, 180, 160," }; 
+    if (temp === "rich") return { a: "rgba(255, 107, 74, ", b: "rgba(255, 194, 76, ", ring: "rgba(255, 94, 58, 0.4)", glowColor: "rgba(255, 100, 60," };
+    if (temp === "light") return { a: "rgba(255, 160, 130, ", b: "rgba(240, 248, 255, ", ring: "rgba(176, 224, 230, 0.5)", glowColor: "rgba(255, 180, 160," };
     return { a: "rgba(255, 138, 61, ", b: "rgba(255, 211, 106, ", ring: "rgba(255, 138, 61, 0.28)", glowColor: "rgba(255, 138, 61," };
   }, [temp]);
 
@@ -536,43 +607,43 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
 
   return (
     <div className="relative flex flex-col items-center justify-center">
-        <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-            
-          <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
-            
-            <motion.div 
-                key="core-shape"
-                className="absolute inset-6" 
-                animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }} 
-                transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }} 
-                style={{ borderRadius: '42%', background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)`, transform: `translate(${jitter}px, ${-jitter}px)` }} 
-            />
-            <motion.div 
-                key="mist-shape"
-                className="absolute inset-10" 
-                animate={mode === "chaos" ? { opacity: [0.25, 0.6, 0.35, 0.7, 0.25], x: [0, 2, -2, 1, 0], y: [0, -1, 2, -2, 0] } : { opacity: [0.35, 0.55, 0.35] }} 
-                transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }} 
-                style={{ borderRadius: '48%', background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }} 
-            />
-            
-          <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
-        </div>
+      <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+
+        <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 35% 30%, ${palette.b}${0.22 + 0.25 * glow}) 0%, ${palette.glowColor}${glowOpacity + 0.1 * glow}) 40%, rgba(0,0,0,0) 70%)`, filter: `blur(${hazeBlur}px)`, transform: "scale(1.05)", opacity: 0.9 }} />
+
+        <motion.div
+          key="core-shape"
+          className="absolute inset-6"
+          animate={mode === "chaos" ? { scale: [1, 1.06, 0.98, 1.04, 1], rotate: [0, -1.2, 0.6, -0.8, 0] } : mode === "stable" ? { scale: [1, 1.035, 1], rotate: [0, 0.2, 0] } : { scale: [1, 1.05, 1], rotate: [0, 0, 0] }}
+          transition={{ duration: dur, repeat: Infinity, ease: "easeInOut" }}
+          style={{ borderRadius: '42%', background: `radial-gradient(circle at 30% 30%, ${palette.b}0.7) 0%, ${palette.a}${coreOpacity}) 45%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0) 100%)`, boxShadow: `0 30px 80px ${palette.glowColor}${0.1 + 0.18 * glow}), inset 0 0 40px rgba(255,255,255,0.22)`, transform: `translate(${jitter}px, ${-jitter}px)` }}
+        />
+        <motion.div
+          key="mist-shape"
+          className="absolute inset-10"
+          animate={mode === "chaos" ? { opacity: [0.25, 0.6, 0.35, 0.7, 0.25], x: [0, 2, -2, 1, 0], y: [0, -1, 2, -2, 0] } : { opacity: [0.35, 0.55, 0.35] }}
+          transition={{ duration: mode === "chaos" ? 1.2 : 2.8, repeat: Infinity, ease: "easeInOut" }}
+          style={{ borderRadius: '48%', background: `radial-gradient(circle at 40% 35%, rgba(255,255,255,0.55) 0%, ${palette.b}${0.16 + 0.2 * (isDefault ? 0.5 : richness)}) 35%, ${palette.a}0.10) 70%, rgba(0,0,0,0) 100%)`, filter: "blur(10px)" }}
+        />
+
+        <motion.div className="absolute inset-2 rounded-full" animate={mode === "satisfied" ? { opacity: [0.2, 0.55, 0.2] } : { opacity: 0 }} transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }} style={{ boxShadow: mode === "satisfied" ? `0 0 60px ${palette.b}0.35)` : "none" }} />
+      </div>
     </div>
   );
 }
 
-function ProgressDots({ step, total, onStepClick }) {
+function ProgressDots({ step, total, onStepClick }: { step: number; total: number; onStepClick: (idx: number) => void }) {
   return (
     <div className="flex items-center justify-center gap-2 mt-4">
       {Array.from({ length: total }).map((_, i) => (
-        <div 
-            key={i} 
-            onClick={() => { if(i <= step) onStepClick(i); }}
-            className={`h-2 w-2 rounded-full transition-all duration-200 ${i <= step ? 'cursor-pointer' : ''}`}
-            style={{ 
-                background: i === step ? warm.orange : "rgba(255, 138, 61, 0.15)", 
-                transform: i === step ? "scale(1.25)" : "scale(1)",
-            }} 
+        <div
+          key={i}
+          onClick={() => { if (i <= step) onStepClick(i); }}
+          className={`h-2 w-2 rounded-full transition-all duration-200 ${i <= step ? 'cursor-pointer' : ''}`}
+          style={{
+            background: i === step ? warm.orange : "rgba(255, 138, 61, 0.15)",
+            transform: i === step ? "scale(1.25)" : "scale(1)",
+          }}
         />
       ))}
     </div>
@@ -582,64 +653,64 @@ function ProgressDots({ step, total, onStepClick }) {
 export default function App() {
   const t = useLanguage();
   const { log, setLog } = useLocalStorageLog();
-  const [screen, setScreen] = useState("home");
+  const [screen, setScreen] = useState<Screen>("home");
   const [chooseStep, setChooseStep] = useState(0);
   const totalChooseSteps = 3;
 
-  const [temp, setTemp] = useState(null);
-  const [hunger, setHunger] = useState(null);
-  const [budget, setBudget] = useState(null);
-  const [richness, setRichness] = useState(0.5); 
-  const [speed, setSpeed] = useState(null); 
+  const [temp, setTemp] = useState<Temp | null>(null);
+  const [hunger, setHunger] = useState<Hunger | null>(null);
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const [richness, setRichness] = useState(0.5);
+  const [speed, setSpeed] = useState<Speed | null>(null);
 
-  const pressTimer = useRef(null);
+  const pressTimer = useRef<number | null>(null);
   const [pressing, setPressing] = useState(false);
-  const [isRandomizing, setIsRandomizing] = useState(false); 
-    
+  const [isRandomizing, setIsRandomizing] = useState(false);
+
   const [isRandomMode, setIsRandomMode] = useState(false);
 
   const MAX_TEASE_COUNT = 3;
   const [swipeTeaseCount, setSwipeTeaseCount] = useState(() => {
     try {
-        const val = localStorage.getItem(LS_SWIPE_COUNT_KEY);
-        return val ? parseInt(val, 10) : 0;
+      const val = localStorage.getItem(LS_SWIPE_COUNT_KEY);
+      return val ? parseInt(val, 10) : 0;
     } catch {
-        return 0;
+      return 0;
     }
   });
 
   const incrementTeaseCount = () => {
-      if (swipeTeaseCount < MAX_TEASE_COUNT) {
-          const newCount = swipeTeaseCount + 1;
-          setSwipeTeaseCount(newCount);
-          try { localStorage.setItem(LS_SWIPE_COUNT_KEY, newCount.toString()); } catch {}
-      }
+    if (swipeTeaseCount < MAX_TEASE_COUNT) {
+      const newCount = swipeTeaseCount + 1;
+      setSwipeTeaseCount(newCount);
+      try { localStorage.setItem(LS_SWIPE_COUNT_KEY, newCount.toString()); } catch { }
+    }
   };
 
   const markSwipeFullyLearned = () => {
-      setSwipeTeaseCount(MAX_TEASE_COUNT);
-      try { localStorage.setItem(LS_SWIPE_COUNT_KEY, MAX_TEASE_COUNT.toString()); } catch {}
+    setSwipeTeaseCount(MAX_TEASE_COUNT);
+    try { localStorage.setItem(LS_SWIPE_COUNT_KEY, MAX_TEASE_COUNT.toString()); } catch { }
   };
 
-  const [aiSuggestion, setAiSuggestion] = useState(null);
+  const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  const [realPlaces, setRealPlaces] = useState([]);
-  const [userLocation, setUserLocation] = useState(null);
+  const [realPlaces, setRealPlaces] = useState<Place[]>([]);
+  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [isRealLoading, setIsRealLoading] = useState(false);
-  const [apiError, setApiError] = useState(null);
-  const [searchRadius, setSearchRadius] = useState(1000); 
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [searchRadius, setSearchRadius] = useState(1000);
 
   // 新增：搜尋進度狀態 (0-100)
   const [searchProgress, setSearchProgress] = useState(0);
-    
+
   const derived = useMemo(() => computeTags({ temp, hunger, budget }, t), [temp, hunger, budget, t]);
   const tags = derived.tags;
-  const style = budget === "expensive" ? "rich" : "light";
-  
+  // style is declared but never read, removing to fix error
+  // const style = budget === "expensive" ? "rich" : "light";
+
   // 3. 搜尋邏輯重構：後端 API 專用關鍵字 (廣泛，確保抓到資料)
   const backendMapsQuery = useMemo(() => {
-    // 核心判斷：是「吃飽」還是「吃巧」？
     if (hunger === "full") return "restaurant";
     if (hunger === "snack") return "snack";
     return "food"; // 沒選就搜食物
@@ -652,6 +723,9 @@ export default function App() {
     return "探索附近美食";
   }, [hunger]);
 
+  // Construct mapQuery for backend to keep consistency with original logic structure if needed
+  // But actually we use backendMapsQuery for the fetch now.
+  
   const groupedLogs = useMemo(() => groupLogsByDate(log, t), [log, t]);
 
   const VISIBLE_COUNT = 3;
@@ -666,24 +740,24 @@ export default function App() {
   }, []);
 
   // 搜尋進度計時器
-  const progressInterval = useRef(null);
+  const progressInterval = useRef<number | null>(null);
 
-  const startProgressCrawl = (start, end, durationMs) => {
+  const startProgressCrawl = (start: number, end: number, durationMs: number) => {
     if (progressInterval.current) clearInterval(progressInterval.current);
     const stepTime = 100; // 每 100ms 更新一次
     const steps = durationMs / stepTime;
     const increment = (end - start) / steps;
-    
+
     setSearchProgress(start);
     let current = start;
 
-    progressInterval.current = setInterval(() => {
-        current += increment;
-        if (current >= end) {
-            current = end;
-            clearInterval(progressInterval.current);
-        }
-        setSearchProgress(current);
+    progressInterval.current = window.setInterval(() => {
+      current += increment;
+      if (current >= end) {
+        current = end;
+        if (progressInterval.current) clearInterval(progressInterval.current);
+      }
+      setSearchProgress(current);
     }, stepTime);
   };
 
@@ -691,82 +765,174 @@ export default function App() {
     if (progressInterval.current) clearInterval(progressInterval.current);
   };
 
-  const searchPlacesWithRipple = async (radius, retryCount = 0) => {
-    // Note: In Preview, this will likely fail or do nothing unless we mock it.
-    if (!userLocation) return;
-    
+  const searchPlacesWithRipple = async (radius: number, retryCount = 0) => {
+    if (!userLocation || !BACKEND_API_URL || !BACKEND_GEMINI_URL) return;
+
     setIsRealLoading(true);
     setApiError(null);
     setSearchRadius(radius);
 
     // 2. 進度條邏輯
     if (retryCount === 0) {
-        // 初始搜尋
-        startProgressCrawl(10, 40, 3000); // 3秒內爬到 40%
+      // 初始搜尋
+      startProgressCrawl(10, 40, 3000); // 3秒內爬到 40%
     } else {
-        // 擴大搜尋中
-        startProgressCrawl(40, 60, 4000); // 4秒內爬到 60%
+      // 擴大搜尋中
+      startProgressCrawl(40, 60, 4000); // 4秒內爬到 60%
     }
 
-    // MOCKING for Preview
-    setTimeout(() => {
+    const logicTags = [];
+    if (temp === 'light') logicTags.push("LIGHT");
+    if (temp === 'rich') logicTags.push("RICH");
+    if (budget === 'cheap') logicTags.push("CHEAP");
+    if (budget === 'expensive') logicTags.push("EXPENSIVE");
+    if (hunger === 'full') logicTags.push("FULL");
+    if (hunger === 'snack') logicTags.push("SNACK");
+
+    // Re-calculating style here since we removed the unused var earlier
+    const currentStyle: Style = budget === "expensive" ? "rich" : "light";
+
+    try {
+      // Step 1: Google Maps Search (Backend)
+      const placesRes = await fetch(BACKEND_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lat: userLocation.lat,
+          lng: userLocation.lng,
+          query: backendMapsQuery, // 使用廣泛關鍵字
+          language: navigator.language,
+          radius: radius
+        })
+      });
+
+      if (!placesRes.ok) throw new Error(await placesRes.text());
+      const rawPlaces: Place[] = await placesRes.json();
+
+      // Case: No results at all
+      if (rawPlaces.length === 0) {
         stopProgress();
-        
-        // 模擬擴大搜尋情境 (第一次失敗)
-        if (radius === 1000) {
-            console.log("Mock: Radius 1000m -> No results, expanding...");
-            searchPlacesWithRipple(2000, retryCount + 1);
-            return;
+        if (radius < 5000) {
+          console.log(`[同心圓] ${radius}m 無結果，擴大至 ${radius * 2}m...`);
+          searchPlacesWithRipple(radius * 2, retryCount + 1);
+          return;
+        } else {
+          setRealPlaces([]);
+          setApiError(t.notFound); // 情境 A: 真的沒資料
+          setSearchProgress(100);
+          setIsRealLoading(false);
+          return;
+        }
+      }
+
+      // Step 2: AI Filtering (Gemini)
+      if (rawPlaces.length > 0) {
+        stopProgress();
+        setSearchProgress(70); 
+        startProgressCrawl(70, 90, 2000); // AI 思考中
+
+        const filterRes = await fetch(BACKEND_GEMINI_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "filter",
+            candidates: rawPlaces,
+            userTags: tags,
+            logicTags: logicTags,
+            language: navigator.language
+          })
+        });
+
+        const filterData = await filterRes.json();
+        let finalIndices: number[] = [];
+        try {
+          const jsonText = filterData.candidates?.[0]?.content?.parts?.[0]?.text;
+          const parsed = JSON.parse(jsonText.replace(/```json/g, "").replace(/```/g, ""));
+          finalIndices = parsed.ids || [];
+        } catch (e) {
+          console.error("AI 解析失敗", e);
+          finalIndices = [];
         }
 
-        // 模擬 AI 思考 (第二次)
-        setIsRealLoading(false); // Google 階段結束
-        setSearchProgress(70); // 跳到 AI 階段
-        startProgressCrawl(70, 90, 1500); // 1.5秒爬到 90
+        const aiSelectedPlaces = rawPlaces.filter((_, index) => finalIndices.includes(index));
 
-        // 模擬最終沒找到資料 (觸發 Not Found)
-        setTimeout(() => {
-            stopProgress();
-            setSearchProgress(100);
-            // 模擬真的沒資料的情境 (對應文案的情境A)
-            setApiError(t.notFound); 
-            setRealPlaces([]); 
-        }, 1500);
+        if (aiSelectedPlaces.length === 0) {
+          // AI 覺得都不行，進入保底機制 (情境 B)
+          if (radius < 5000 && retryCount < 1) { 
+             // 如果半徑還小，也許擴大範圍會有更好的？(選擇性策略)
+             // 這裡我們選擇：如果 AI 全滅，先嘗試擴大一次，真的不行再保底
+             stopProgress();
+             console.log(`[AI淘汰] ${radius}m 內無合格店家，擴大至 ${radius * 2}m...`);
+             searchPlacesWithRipple(radius * 2, retryCount + 1);
+             return;
+          } else {
+             // 保底機制：選評分高的
+             const fallbackPlaces = rawPlaces
+               .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+               .slice(0, 3);
+             
+             const placesWithDist = fallbackPlaces.map((p) => {
+               const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
+               return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: currentStyle, hunger: hunger, speed: speed };
+             });
+             
+             placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
 
-    }, 2000);
+             setRealPlaces(placesWithDist);
+             setApiError(t.fallbackMessage); // 情境 B: 有資料但非完美
+             setSearchProgress(100);
+             setIsRealLoading(false);
+             return;
+          }
+        }
+
+        const placesWithDist = aiSelectedPlaces.map((p) => {
+          const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
+          return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: currentStyle, hunger: hunger, speed: speed };
+        });
+
+        placesWithDist.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
+
+        setRealPlaces(placesWithDist);
+        setSearchProgress(100);
+        setIsRealLoading(false);
+      }
+
+    } catch (err: any) {
+      setApiError(`API Error: ${err.message}`);
+      setSearchProgress(100);
+      setIsRealLoading(false);
+    }
   };
 
   useEffect(() => {
     if (realPlaces.length > 0 || apiError) {
-        setIsRealLoading(false);
-        setSearchProgress(100);
+      setIsRealLoading(false);
+      setSearchProgress(100);
     }
   }, [realPlaces, apiError]);
 
   useEffect(() => {
     if (screen === "recommend" && userLocation) {
-        setSearchRadius(1000); 
-        searchPlacesWithRipple(1000);
-    } else if (screen === "recommend" && !userLocation) {
-        // Mock location for preview if not allowed
-        setUserLocation({ lat: 25.033, lng: 121.565 });
+      setSearchRadius(1000);
+      searchPlacesWithRipple(1000);
     }
-  }, [screen, userLocation]); 
+  }, [screen, userLocation]); // backendMapsQuery is used inside function, no need dependency here if we want to avoid double trigger, or can add if logic changes.
 
   const visiblePlaces = useMemo(() => realPlaces.slice(0, VISIBLE_COUNT), [realPlaces]);
 
   function resetFlow() {
     setChooseStep(0); setTemp(null); setHunger(null); setBudget(null); setRichness(0.5); setSpeed(null);
     setPressing(false); setAiSuggestion(null); setRealPlaces([]); setApiError(null); setSearchProgress(0);
-    setIsRandomMode(false); 
+    setIsRandomMode(false);
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
-  function goHome() { 
-      // 5. BUG FIX: 解決卡片殘留
-      setRealPlaces([]);
-      resetFlow(); 
-      setScreen("home"); 
+  function goHome() {
+    // 5. BUG FIX: 解決卡片殘留
+    setRealPlaces([]);
+    resetFlow();
+    setScreen("home");
   }
 
   function goBack() {
@@ -776,24 +942,24 @@ export default function App() {
       return;
     }
     if (screen === "recommend") {
-        // 5. BUG FIX: 解決卡片殘留
-        setRealPlaces([]); 
-        if (isRandomMode) return goHome();
-        return setScreen("choose"); 
+      // 5. BUG FIX: 解決卡片殘留
+      setRealPlaces([]);
+      if (isRandomMode) return goHome();
+      return setScreen("choose");
     }
     if (screen === "energy") return setScreen("recommend");
     if (screen === "log") return goHome();
     return goHome();
   }
 
-  function startDecision() { 
-      // 5. BUG FIX: 解決卡片殘留
-      setRealPlaces([]);
-      resetFlow(); 
-      setIsRandomMode(false); 
-      setScreen("choose"); 
+  function startDecision() {
+    // 5. BUG FIX: 解決卡片殘留
+    setRealPlaces([]);
+    resetFlow();
+    setIsRandomMode(false);
+    setScreen("choose");
   }
-    
+
   function nextChoose() { if (chooseStep < totalChooseSteps - 1) setChooseStep((s) => s + 1); else setScreen("recommend"); }
 
   function randomizeAll() {
@@ -802,64 +968,64 @@ export default function App() {
     const rndBudget = Math.random() > 0.5 ? "cheap" : "expensive";
     setBudget(rndBudget);
     if (rndBudget === "cheap") {
-        setRichness(0.3);
-        setSpeed("fast");
+      setRichness(0.3);
+      setSpeed("fast");
     } else {
-        setRichness(0.8);
-        setSpeed("sit");
+      setRichness(0.8);
+      setSpeed("sit");
     }
   }
 
   function handleRandomClick() {
-      setIsRandomizing(true);
-      setTimeout(() => {
-          randomizeAll();
-          setIsRandomizing(false);
-          setIsRandomMode(true);
-          setScreen("recommend");
-      }, 600);
+    setIsRandomizing(true);
+    setTimeout(() => {
+      randomizeAll();
+      setIsRandomizing(false);
+      setIsRandomMode(true);
+      setScreen("recommend");
+    }, 600);
   }
 
-  function handleBudgetSelect(b) {
-      setBudget(b);
-      if (b === "cheap") {
-          setRichness(0.3);
-          setSpeed("fast");
-      } else {
-          setRichness(0.8);
-          setSpeed("sit");
-      }
+  function handleBudgetSelect(b: Budget) {
+    setBudget(b);
+    if (b === "cheap") {
+      setRichness(0.3);
+      setSpeed("fast");
+    } else {
+      setRichness(0.8);
+      setSpeed("sit");
+    }
   }
 
-  function saveEnergy(choiceText, isCategory = false) {
-    const entry = {
+  function saveEnergy(choiceText: string, isCategory: boolean = false) {
+    const entry: LogEntry = {
       id: `e_${Date.now()}`,
       at: nowISO(),
       tags,
       choiceText: choiceText || "",
-      isCategory, 
-      isPinned: false, 
+      isCategory,
+      isPinned: false,
       sig: { warmth: clamp(0.35 + richness * 0.65, 0, 1), mode: "satisfied", temp, hunger, speed, richness },
     };
     setLog((prev) => [entry, ...prev]);
   }
 
-  function togglePin(id) {
-    markSwipeFullyLearned(); 
+  function togglePin(id: string) {
+    markSwipeFullyLearned();
     setLog(prev => prev.map(item => item.id === id ? { ...item, isPinned: !item.isPinned } : item));
   }
 
-  function deleteLog(id) {
-    markSwipeFullyLearned(); 
+  function deleteLog(id: string) {
+    markSwipeFullyLearned();
     setLog(prev => prev.filter(item => item.id !== id));
   }
 
-  function handleStartNav(place) {
+  function handleStartNav(place: Place | string) {
     const name = typeof place === 'string' ? place : place.name;
     const placeId = typeof place === 'object' ? place.googlePlaceId : undefined;
-    const url = getGoogleMapsUrl(name, placeId); 
-      
-    saveEnergy(name, false); 
+    const url = getGoogleMapsUrl(name, placeId);
+
+    saveEnergy(name, false);
     setScreen("energy");
     navigateToMap(url);
   }
@@ -867,30 +1033,90 @@ export default function App() {
   function handleSearchCategory() {
     // 4. 手動搜尋使用口語短句
     const url = getGoogleMapsUrl(manualSearchQuery);
-      
-    saveEnergy(`搜尋：${manualSearchQuery}`, true); 
-    setScreen("energy"); 
+
+    saveEnergy(`搜尋：${manualSearchQuery}`, true);
+    setScreen("energy");
     navigateToMap(url);
   }
 
-  function handleReEat(entry) {
-    let query = entry.choiceText || ""; 
+  function handleReEat(entry: LogEntry) {
+    let query = entry.choiceText || "";
     if (query.startsWith("搜尋：")) query = query.replace("搜尋：", "");
     const url = getGoogleMapsUrl(query);
     navigateToMap(url);
   }
 
   async function callGeminiChef() {
-     // Mocking AI response for preview
-     setIsAiLoading(true);
-     setTimeout(() => {
-         setIsAiLoading(false);
-         setAiSuggestion({
-             dish: "預覽模式範例：鹽酥雞",
-             reason: "雖然找不到 API，但這時候吃個鹽酥雞絕對不會錯！",
-             keyword: "鹽酥雞"
-         });
-     }, 2000);
+    if (!BACKEND_GEMINI_URL) return alert("請先設定後端 Gemini API 網址！");
+    setIsAiLoading(true);
+
+    let targetPlace: Place | null = null;
+
+    const hiddenCandidates = realPlaces.filter(p => !visiblePlaces.some(vp => vp.id === p.id));
+
+    if (hiddenCandidates.length > 0) {
+        targetPlace = hiddenCandidates[Math.floor(Math.random() * hiddenCandidates.length)];
+    } else {
+        targetPlace = null;
+    }
+
+    const userLang = navigator.language;
+    const isChinese = userLang.toLowerCase().includes("zh");
+    const langRule = isChinese 
+        ? "請堅持使用繁體中文 (Traditional Chinese)，絕對禁止出現簡體中文或中國大陸用語。" 
+        : `Please respond in ${userLang}.`;
+
+    let prompt = "";
+    if (targetPlace) {
+        prompt = `使用者想吃：${tags.join(', ')}。
+        推薦一家店叫「${targetPlace.name}」。
+        ${langRule}
+        請給出一個「推薦這家店」的理由，語氣要像在地老饕，簡潔有力，30字以內。
+        同時請安撫使用者，這家店雖然可能不是完美的 100分，但絕對值得一試。
+        格式：{ "dish": "${targetPlace.name}", "reason": "你的推薦理由" }`;
+    } else {
+        prompt = `使用者想吃：${tags.join(', ')}。
+        附近已經沒有其他符合條件的推薦店家的了。
+        ${langRule}
+        請給出一個「通用的餐點建議」（例如：不如去便利商店買個關東煮？或是改吃水果？），語氣幽默一點。
+        並且提供一個「精確的搜尋關鍵字 (keyword)」，讓使用者點擊後能在 Google Maps 上搜到結果（例如："便利商店", "水果店", "速食"）。
+        回傳 JSON 格式：{ "dish": "通用建議標題", "reason": "一句話幽默建議(30字內)", "keyword": "精確搜尋關鍵字" }`;
+    }
+
+    try {
+      const response = await fetch(BACKEND_GEMINI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+            mode: "suggestion", 
+            prompt: prompt,
+            language: navigator.language 
+        })
+      });
+      const data = await response.json();
+        
+      let suggestion = null;
+      if (data.dish) {
+          suggestion = data;
+      } else if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          const text = data.candidates[0].content.parts[0].text;
+          const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+          suggestion = JSON.parse(cleanText);
+      }
+
+      if (suggestion) {
+          if (targetPlace) {
+              suggestion.targetPlace = targetPlace;
+          }
+          setAiSuggestion(suggestion);
+      }
+
+    } catch (error) {
+      console.error("AI Error:", error);
+      alert("AI 腦力激盪中斷了，請再試一次");
+    } finally {
+      setIsAiLoading(false);
+    }
   }
 
   function subtleTitle() {
@@ -901,19 +1127,19 @@ export default function App() {
     return t.subtitles.log;
   }
 
-  const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" };
-    
+  const card = { background: "rgba(255,255,255,0.72)", border: warm.borderSubtle, boxShadow: "0 16px 50px rgba(255, 159, 94, 0.08)" } as const;
+
   return (
     <div className="min-h-screen w-full flex items-start justify-center px-3" style={{ background: warm.bg, color: warm.text }}>
       <div className="w-full max-w-[420px]" style={{ maxWidth: 420 }}>
-        <TopBar 
-            screen={screen}
-            isRandomMode={isRandomMode}
-            onBack={goBack} 
-            onGoHome={goHome}
-            onOpenLog={() => setScreen("log")} 
-            hasLog={log.length > 0}
-            title={subtleTitle()} 
+        <TopBar
+          screen={screen}
+          isRandomMode={isRandomMode}
+          onBack={goBack}
+          onGoHome={goHome}
+          onOpenLog={() => setScreen("log")}
+          hasLog={log.length > 0}
+          title={subtleTitle()}
         />
         <div className="px-4 pt-4 pb-10">
           <div className="rounded-[28px] overflow-hidden relative backdrop-blur-md" style={{ ...card, background: screen === "energy" || screen === "home" ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.72)" }}>
@@ -929,8 +1155,8 @@ export default function App() {
                     <div className="mt-4 flex justify-center w-full px-8">
                       <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleReEat(log[0])} className="group flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors hover:bg-black/5 w-full max-w-[320px]" style={{ color: warm.sub, maxWidth: 320 }}>
                         <div className="flex items-center justify-center gap-2 text-xs opacity-60 w-full" style={{ letterSpacing: "0.05em" }}>
-                            <LucideRotateCcw size={12} color="currentColor" strokeWidth={1.5} />
-                            <span>{t.lastEat}</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span>
+                          <LucideRotateCcw size={12} color="currentColor" strokeWidth={1.5} />
+                          <span>{t.lastEat}</span><span className="opacity-50">·</span><span>{fmtDate(log[0].at)}</span>
                         </div>
                         <div className="text-base leading-snug font-medium text-center w-full break-words opacity-80" style={{ color: warm.text }}>{(log[0].choiceText || "").replace("搜尋：", "")}</div>
                       </motion.button>
@@ -938,20 +1164,20 @@ export default function App() {
                   )}
                   <div className="mt-12"><PrimaryButton onClick={startDecision}>{t.startBtn}</PrimaryButton></div>
                   <div className="mt-6">
-                    <button 
-                        onClick={handleRandomClick}
-                        className="w-full rounded-2xl px-4 py-4 transition overflow-hidden relative" 
-                        style={{ border: warm.border, background: isRandomizing ? "linear-gradient(135deg, rgba(255,138,61,0.18) 0%, rgba(255,211,106,0.22) 100%)" : "rgba(255,255,255,0.75)", boxShadow: isRandomizing ? warm.shadowActive : warm.shadow }}
+                    <button
+                      onClick={handleRandomClick}
+                      className="w-full rounded-2xl px-4 py-4 transition overflow-hidden relative"
+                      style={{ border: warm.border, background: isRandomizing ? "linear-gradient(135deg, rgba(255,138,61,0.18) 0%, rgba(255,211,106,0.22) 100%)" : "rgba(255,255,255,0.75)", boxShadow: isRandomizing ? warm.shadowActive : warm.shadow }}
                     >
                       {isRandomizing ? (
-                          <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                              <span className="animate-pulse text-base" style={{color: warm.orange, fontWeight: 600, letterSpacing: "0.05em"}}>{t.randoming}</span>
-                          </div>
+                        <div className="relative z-10 flex flex-col items-center justify-center h-full">
+                          <span className="animate-pulse text-base" style={{ color: warm.orange, fontWeight: 600, letterSpacing: "0.05em" }}>{t.randoming}</span>
+                        </div>
                       ) : (
-                          <>
-                              <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>{t.randomBtn}</div>
-                              <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
-                          </>
+                        <>
+                          <div className="relative z-10 text-base" style={{ fontWeight: 600, color: warm.text, textAlign: "center", letterSpacing: "0.05em" }}>{t.randomBtn}</div>
+                          <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+                        </>
                       )}
                     </button>
                   </div>
@@ -990,27 +1216,27 @@ export default function App() {
 
               {screen === "recommend" && (
                 <motion.div key="recommend" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
-                  <div className="text-xl mt-4 text-center font-bold" style={{color: warm.text}}>{t.recommendTitle}</div>
+                  <div className="text-xl mt-4 text-center font-bold" style={{ color: warm.text }}>{t.recommendTitle}</div>
                   <div className="flex flex-col items-center justify-center mb-6">
                     <EnergyCore mode={pressing ? "chaos" : "stable"} temp={temp} richness={richness} size={160} />
                     <div className="mt-4 flex flex-wrap gap-2 justify-center">{tags.map((t) => (<Tag key={t}>{t}</Tag>))}</div>
                   </div>
-                    
+
                   <div className="mt-4 space-y-4">
                     {/* 2. 進度條區塊 */}
-                    {(isRealLoading || searchProgress > 0 && searchProgress < 100) && (
+                    {(isRealLoading || (searchProgress > 0 && searchProgress < 100)) && (
                       <div className="py-6 flex flex-col items-center justify-center">
-                          <div className="text-center text-sm font-medium animate-pulse" style={{color: warm.sub}}>
-                              {searchProgress < 70 ? (
-                                  searchRadius > 1000 ? t.expanding : t.searching
-                              ) : (
-                                  t.aiThinking
-                              )}
-                          </div>
-                          <ProgressBar progress={searchProgress} />
+                        <div className="text-center text-sm font-medium animate-pulse" style={{ color: warm.sub }}>
+                          {searchProgress < 70 ? (
+                            searchRadius > 1000 ? t.expanding : t.searching
+                          ) : (
+                            t.aiThinking
+                          )}
+                        </div>
+                        <ProgressBar progress={searchProgress} />
                       </div>
                     )}
-                      
+
                     {!isRealLoading && apiError && (
                       <div className="py-8 text-center text-gray-500 text-sm whitespace-pre-line">
                         {apiError}
@@ -1019,69 +1245,69 @@ export default function App() {
 
                     {/* 有資料時顯示：根據是否有 fallbackMessage 來決定是否顯示提示標題 */}
                     {!isRealLoading && visiblePlaces.length > 0 && apiError && (
-                        <div className="text-center text-xs text-orange-400 font-bold mb-2 whitespace-pre-line">
-                            {apiError}
-                        </div>
+                      <div className="text-center text-xs text-orange-400 font-bold mb-2 whitespace-pre-line">
+                        {apiError}
+                      </div>
                     )}
-                      
+
                     {visiblePlaces.map((p) => {
                       return (
-                        <motion.button 
-                            key={p.id} 
-                            whileTap={{ scale: 0.99 }} 
-                            className="w-full rounded-2xl p-4 text-left transition-all duration-300 group" 
-                            style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.6)", boxShadow: warm.shadow }} 
-                            onClick={() => handleStartNav(p)}
+                        <motion.button
+                          key={p.id}
+                          whileTap={{ scale: 0.99 }}
+                          className="w-full rounded-2xl p-4 text-left transition-all duration-300 group"
+                          style={{ border: warm.borderSubtle, background: "rgba(255,255,255,0.6)", boxShadow: warm.shadow }}
+                          onClick={() => handleStartNav(p)}
                         >
                           <div className="flex items-start justify-between gap-3 min-h-[50px]">
-                                <div className="flex items-start justify-between gap-3 w-full">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-base break-words" style={{ fontWeight: 700, color: warm.text, letterSpacing: "0.02em" }}>{p.name}</div>
-                                        <div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>{p.distance} ・ <span style={{color: warm.orange}}>{p.rating ? `★${p.rating}` : ' - '}</span></div>
-                                    </div>
-                                    <div className="h-9 w-9 flex-shrink-0 rounded-full flex items-center justify-center transition-colors group-hover:bg-orange-100" style={{ background: "rgba(255,138,61,0.1)", border: "1px solid rgba(255,138,61,0.2)" }}>
-                                        <span style={{ fontWeight: 800, color: warm.orange, fontSize: 12 }} aria-hidden>→</span>
-                                    </div>
-                                </div>
+                            <div className="flex items-start justify-between gap-3 w-full">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-base break-words" style={{ fontWeight: 700, color: warm.text, letterSpacing: "0.02em" }}>{p.name}</div>
+                                <div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>{p.distance} ・ <span style={{ color: warm.orange }}>{p.rating ? `★${p.rating}` : ' - '}</span></div>
+                              </div>
+                              <div className="h-9 w-9 flex-shrink-0 rounded-full flex items-center justify-center transition-colors group-hover:bg-orange-100" style={{ background: "rgba(255,138,61,0.1)", border: "1px solid rgba(255,138,61,0.2)" }}>
+                                <span style={{ fontWeight: 800, color: warm.orange, fontSize: 12 }} aria-hidden>→</span>
+                              </div>
+                            </div>
                           </div>
                         </motion.button>
                       );
                     })}
-                    
+
                     {/* 按鈕區域：當還在跑進度時隱藏按鈕，避免干擾 */}
                     {!isRealLoading && searchProgress === 100 && (
-                        <>
-                            <div className="pt-2 pb-2">
-                              <motion.button whileTap={{ scale: 0.98 }} onClick={callGeminiChef} disabled={isAiLoading} className="w-full rounded-2xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)", border: "1px dashed rgba(255,159,94,0.4)", color: warm.text }}>
-                                {isAiLoading ? (
-                                  <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl">✨</span><span className="font-bold text-sm">{t.aiThinking}</span></div>
-                                ) : aiSuggestion ? (
-                                    <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>↻</span> {t.aiRetry}</div>
-                                ) : (
-                                  <>
-                                    <div className="text-sm font-bold flex items-center justify-center gap-2" style={{letterSpacing: "0.03em"}}><span>✨</span> {t.aiHelp}</div>
-                                  </>
-                                )}
-                              </motion.button>
-                            </div>
-                            {aiSuggestion && (
-                              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl p-5 mb-4 text-left" style={{ background: "rgba(255,255,255,0.9)", border: `1px solid ${warm.orange}`, boxShadow: warm.shadowActive }}>
-                                <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider">✨ {t.aiTag}</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
-                                <div className="text-lg font-bold mb-1" style={{color: warm.text}}>{aiSuggestion.dish}</div>
-                                {aiSuggestion.targetPlace && (
-                                    <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>
-                                        {aiSuggestion.targetPlace.distance} ・ <span style={{color: warm.orange}}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : ' - '}</span>
-                                    </div>
-                                )}
-                                <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{color: "#6B5D52"}}>{aiSuggestion.reason}</div>
-                                <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.keyword || aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
-                              </motion.div>
+                      <>
+                        <div className="pt-2 pb-2">
+                          <motion.button whileTap={{ scale: 0.98 }} onClick={callGeminiChef} disabled={isAiLoading} className="w-full rounded-2xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(135deg, #FFF8E7 0%, #FFF0D4 100%)", border: "1px dashed rgba(255,159,94,0.4)", color: warm.text }}>
+                            {isAiLoading ? (
+                              <div className="flex items-center justify-center gap-2"><span className="animate-spin text-xl">✨</span><span className="font-bold text-sm">{t.aiThinking}</span></div>
+                            ) : aiSuggestion ? (
+                              <div className="text-sm font-bold flex items-center justify-center gap-2" style={{ letterSpacing: "0.03em" }}><span>↻</span> {t.aiRetry}</div>
+                            ) : (
+                              <>
+                                <div className="text-sm font-bold flex items-center justify-center gap-2" style={{ letterSpacing: "0.03em" }}><span>✨</span> {t.aiHelp}</div>
+                              </>
                             )}
-                            <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
-                              <div className="text-sm opacity-60 font-medium">{t.manualSearch}</div>
-                              <div className="text-sm opacity-90"><span className="underline font-bold" style={{textUnderlineOffset: 3}}>{t.manualSearchHint}</span></div>
-                            </motion.button>
-                        </>
+                          </motion.button>
+                        </div>
+                        {aiSuggestion && (
+                          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl p-5 mb-4 text-left" style={{ background: "rgba(255,255,255,0.9)", border: `1px solid ${warm.orange}`, boxShadow: warm.shadowActive }}>
+                            <div className="flex items-center justify-between mb-2"><div className="text-xs font-bold text-orange-500 tracking-wider">✨ {t.aiTag}</div><button onClick={() => setAiSuggestion(null)} className="text-xs opacity-40 p-1">✕</button></div>
+                            <div className="text-lg font-bold mb-1" style={{ color: warm.text }}>{aiSuggestion.dish}</div>
+                            {aiSuggestion.targetPlace && (
+                              <div className="text-sm font-medium mb-3" style={{ color: warm.sub }}>
+                                {aiSuggestion.targetPlace.distance} ・ <span style={{ color: warm.orange }}>{aiSuggestion.targetPlace.rating ? `★${aiSuggestion.targetPlace.rating}` : ' - '}</span>
+                              </div>
+                            )}
+                            <div className="text-sm opacity-80 mb-4 leading-relaxed font-medium" style={{ color: "#6B5D52" }}>{aiSuggestion.reason}</div>
+                            <PrimaryButton onClick={() => handleStartNav(aiSuggestion?.keyword || aiSuggestion?.targetPlace || aiSuggestion?.dish || "")}>{t.goNav}</PrimaryButton>
+                          </motion.div>
+                        )}
+                        <motion.button whileTap={{ scale: 0.98 }} onClick={handleSearchCategory} className="w-full rounded-2xl p-4 text-center mb-4 mt-2 flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.4)", border: warm.borderAction, color: warm.text }}>
+                          <div className="text-sm opacity-60 font-medium">{t.manualSearch}</div>
+                          <div className="text-sm opacity-90"><span className="underline font-bold" style={{ textUnderlineOffset: 3 }}>{t.manualSearchHint}</span></div>
+                        </motion.button>
+                      </>
                     )}
                   </div>
                 </motion.div>
@@ -1100,52 +1326,52 @@ export default function App() {
                 <motion.div key="log" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-0 h-[600px] flex flex-col" style={{ height: 600 }}>
                   <div className="px-6 pt-8 pb-2 flex items-end justify-between gap-3 shrink-0">
                     <div><div className="text-xl" style={{ fontWeight: 700, letterSpacing: "0.02em" }}>{t.logTitle}</div><div className="mt-1 text-sm font-medium" style={{ color: warm.sub }}>{t.logSubtitle}</div></div>
-                    <button 
-                        className="rounded-xl px-3 py-2 text-xs font-medium transition-opacity disabled:opacity-50" 
-                        style={{ border: warm.borderAction, background: "rgba(255,255,255,0.5)", color: warm.orange }} 
-                        onClick={() => {
-                            if (window.confirm(t.confirmClear)) {
-                                setLog([]);
-                            }
-                        }} 
-                        disabled={log.length === 0}
-                        title="清空本機紀錄"
+                    <button
+                      className="rounded-xl px-3 py-2 text-xs font-medium transition-opacity disabled:opacity-50"
+                      style={{ border: warm.borderAction, background: "rgba(255,255,255,0.5)", color: warm.orange }}
+                      onClick={() => {
+                        if (window.confirm(t.confirmClear)) {
+                          setLog([]);
+                        }
+                      }}
+                      disabled={log.length === 0}
+                      title="清空本機紀錄"
                     >
-                        <LucideTrash2 size={18} color={warm.orange} />
+                      <LucideTrash2 size={18} color={warm.orange} />
                     </button>
                   </div>
                   <div className="flex-1 overflow-y-auto relative px-6">
                     <div className="pt-4 pb-6 space-y-3">
                       {groupedLogs.length === 0 ? (
                         <div className="rounded-2xl p-6 mt-4 text-center" style={{ border: "1px dashed rgba(255,138,61,0.3)", background: "rgba(255,211,106,0.08)" }}>
-                          <div className="text-base font-bold" style={{color: warm.text}}>{t.emptyLog}</div><div className="mt-2 text-sm text-gray-500">{t.emptyLogDesc}</div>
+                          <div className="text-base font-bold" style={{ color: warm.text }}>{t.emptyLog}</div><div className="mt-2 text-sm text-gray-500">{t.emptyLogDesc}</div>
                         </div>
                       ) : (
                         groupedLogs.map((group) => (
                           <div key={group.title} className="mb-6">
                             <div className="flex items-center gap-2 mb-2 ml-1">
-                                {group.type === 'pinned' && (
-                                    <LucidePin size={16} color={warm.orange} />
-                                )}
-                                {group.type === 'date' && (
-                                    <LucideHistory size={16} color={warm.orange} strokeWidth={1.5} />
-                                )}
-                                <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
+                              {group.type === 'pinned' && (
+                                <LucidePin size={16} color={warm.orange} />
+                              )}
+                              {group.type === 'date' && (
+                                <LucideHistory size={16} color={warm.orange} strokeWidth={1.5} />
+                              )}
+                              <span className="text-xs font-bold" style={{ color: warm.orange, letterSpacing: "0.05em" }}>{group.title}</span>
                             </div>
                             {group.items.map((item, itemIndex) => {
-                                const isFirstItem = group === groupedLogs[0] && itemIndex === 0;
-                                return (
-                                  <SwipeableLogItem 
-                                    key={item.id} 
-                                    item={item} 
-                                    onReEat={() => handleReEat(item)} 
-                                    onPin={() => togglePin(item.id)}
-                                    onDelete={() => deleteLog(item.id)}
-                                    tease={isFirstItem && swipeTeaseCount < MAX_TEASE_COUNT}
-                                    onTeaseComplete={incrementTeaseCount}
-                                    t={t} 
-                                  />
-                                );
+                              const isFirstItem = group === groupedLogs[0] && itemIndex === 0;
+                              return (
+                                <SwipeableLogItem
+                                  key={item.id}
+                                  item={item}
+                                  onReEat={() => handleReEat(item)}
+                                  onPin={() => togglePin(item.id)}
+                                  onDelete={() => deleteLog(item.id)}
+                                  tease={isFirstItem && swipeTeaseCount < MAX_TEASE_COUNT}
+                                  onTeaseComplete={incrementTeaseCount}
+                                  t={t}
+                                />
+                              );
                             })}
                           </div>
                         ))
