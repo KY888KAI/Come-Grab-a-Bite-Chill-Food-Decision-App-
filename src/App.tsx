@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, animate } from "framer-motion";
 
-// --- Constants & Helpers ---
 const LS_KEY = "whatnow_energy_log_v2";
 const LS_SWIPE_COUNT_KEY = "whatnow_swipe_tease_count";
 const BACKEND_API_URL = "/api/places";
 const BACKEND_GEMINI_URL = "/api/gemini";
+const MAX_TEASE_COUNT = 3; // FIXED: Added missing constant
+const TOTAL_CHOOSE_STEPS = 3; // FIXED: Added missing constant
 
 const warm = {
   bg: "#FAF9F6", text: "#595048", sub: "#9C968F", orange: "#FF9F5E", yellow: "#FFD97F",
@@ -14,7 +15,6 @@ const warm = {
   shadowActive: "0 6px 20px -4px rgba(255, 138, 61, 0.2)", highlight: "inset 0 1px 0 0 rgba(255, 255, 255, 0.6)", deleteRed: "#FF6B6B",
 } as const;
 
-// --- Interfaces ---
 type Temp = "light" | "rich"; type Hunger = "full" | "snack"; type Speed = "fast" | "sit";
 type Budget = "cheap" | "expensive"; type Style = "light" | "rich";
 type Screen = "home" | "choose" | "recommend" | "energy" | "log";
@@ -33,7 +33,6 @@ interface LogEntry {
 
 interface AiSuggestion { dish: string; reason: string; targetPlace?: Place; keyword?: string; }
 
-// --- Translations ---
 const TRANSLATIONS = {
   zh: {
     appTitle: "來覓食", appSubtitle: "佛系覓食，點幾下就知道要吃什麼", startBtn: "開始覓食", randomBtn: "沒想法", randoming: "隨緣覓食中...",
@@ -63,7 +62,6 @@ const TRANSLATIONS = {
   }
 };
 
-// --- Icons (Compact) ---
 const Icon = ({ size = 24, color = "currentColor", strokeWidth = 2, children, ...props }: any) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" {...props} stroke={color} strokeWidth={strokeWidth} style={{ minWidth: size, minHeight: size }}>{children}</svg>);
 const LucideRotateCcw = (p: any) => <Icon {...p}><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></Icon>;
 const LucideHistory = (p: any) => <Icon {...p}><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /><polyline points="12 6 12 12 16 14" /></Icon>;
@@ -74,7 +72,6 @@ const LucideHome = (p: any) => <Icon {...p}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2
 const LucideX = (p: any) => <Icon {...p}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
 const LucideChevronLeft = (p: any) => <Icon {...p}><path d="m15 18-6-6 6-6" /></Icon>;
 
-// --- API Helpers (Logic Extracted) ---
 const fetchGooglePlaces = async (lat: number, lng: number, query: string, radius: number) => {
   const res = await fetch(BACKEND_API_URL, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -95,7 +92,6 @@ const fetchGeminiFilter = async (candidates: Place[], userTags: string[], logicT
   return (parsed.ids || []) as number[];
 };
 
-// --- Utilities ---
 function clamp(n: number, a: number, b: number) { return Math.min(b, Math.max(a, n)); }
 function nowISO() { return new Date().toISOString(); }
 function fmtDate(iso: string) {
@@ -138,7 +134,6 @@ function groupLogsByDate(logs: LogEntry[], t: any) {
   return groups;
 }
 
-// --- Hooks ---
 function useLanguage() { return navigator.language.toLowerCase().startsWith("zh") ? TRANSLATIONS.zh : TRANSLATIONS.en; }
 function useLocalStorageLog() {
   const [log, setLog] = useState<LogEntry[]>(() => { try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { return []; } });
@@ -146,7 +141,6 @@ function useLocalStorageLog() {
   return { log, setLog } as const;
 }
 
-// --- UI Components ---
 const Tag = ({ children }: { children: React.ReactNode }) => (
   <span className="inline-flex items-center rounded-full px-2.5 py-1 font-medium tracking-wide whitespace-nowrap" style={{ background: "rgba(255, 211, 106, 0.15)", color: "#6B5D52", fontSize: "13px" }}>{children}</span>
 );
@@ -229,7 +223,6 @@ function EnergyCore({ mode = "stable", temp = null, richness = 0.5, size = 220 }
   );
 }
 
-// --- Main App ---
 export default function App() {
   const t = useLanguage();
   const { log, setLog } = useLocalStorageLog();
@@ -291,14 +284,14 @@ export default function App() {
       const selected: Place[] = [], others: Place[] = [];
       const allWithDist = rawPlaces.map(p => {
          const d = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, p.lat || 0, p.lng || 0);
-         return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: budget === "expensive" ? "rich" : "light", hunger, speed };
+         const placeStyle = (budget === "expensive" ? "rich" : "light") as Style;
+         return { ...p, distance: d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`, distanceVal: d, type: temp, style: placeStyle, hunger, speed };
       });
       allWithDist.forEach((p, i) => finalIndices.includes(i) ? selected.push(p) : others.push(p));
       others.sort((a, b) => (a.distanceVal || 0) - (b.distanceVal || 0));
 
       if (selected.length === 0) {
         if (radius < 5000 && retry < 1) { stopProgress(); return handleSearch(radius * 2, retry + 1); }
-        // Fallback Logic
         let candidates = allWithDist;
         if (budget === 'expensive') {
            const expensive = allWithDist.filter(p => p.priceLevel && !['PRICE_LEVEL_INEXPENSIVE', 'PRICE_LEVEL_FREE'].includes(p.priceLevel));
@@ -387,7 +380,7 @@ export default function App() {
               )}
               {screen === "choose" && (
                 <motion.div key="choose" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.22 }} className="p-6 pb-12">
-                  <div className="text-xl mt-4 text-center font-bold">{t.stepTitle}</div><ProgressDots step={chooseStep} total={totalChooseSteps} onStepClick={setChooseStep} />
+                  <div className="text-xl mt-4 text-center font-bold">{t.stepTitle}</div><ProgressDots step={chooseStep} total={TOTAL_CHOOSE_STEPS} onStepClick={setChooseStep} />
                   <div className="mt-8 space-y-4">
                     {chooseStep === 0 && <><PillButton active={temp === "light"} onClick={() => setTemp("light")}>{t.light}</PillButton><PillButton active={temp === "rich"} onClick={() => setTemp("rich")}>{t.rich}</PillButton><div className="pt-4"><PrimaryButton onClick={() => setChooseStep(1)} disabled={!temp}>{t.next}</PrimaryButton></div></>}
                     {chooseStep === 1 && <><PillButton active={hunger === "full"} onClick={() => setHunger("full")}>{t.full}</PillButton><PillButton active={hunger === "snack"} onClick={() => setHunger("snack")}>{t.snack}</PillButton><div className="pt-4"><PrimaryButton onClick={() => setChooseStep(2)} disabled={!hunger}>{t.next}</PrimaryButton></div></>}
