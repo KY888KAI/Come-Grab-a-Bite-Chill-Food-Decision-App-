@@ -74,10 +74,10 @@ const TRANSLATIONS = {
     recommendTitle: "附近可以吃什麼",
     searching: "正在掃描附近美食...",
     expanding: "正在幫您看遠一點的地方...",
-    fallbackMessage: "找不到 100% 符合的，\n這幾家也不錯：",
+    fallbackMessage: "找不到 100% 符合的，這幾家也不錯：", // 修改：單行
     notFound: "這裡暫時沒有合適的店，\n試試別的條件？",
     filtering: "主廚正在為您精選菜單...", 
-    aiThinking: "AI 大廚正在思考...",
+    aiThinking: "AI 大廚正在思考...", 
     aiRetry: "還是不滿意？再試一次",
     aiHelp: "都不滿意？交給主廚決定",
     aiTag: "主廚精選", 
@@ -128,7 +128,7 @@ const TRANSLATIONS = {
     recommendTitle: "What's Nearby",
     searching: "Scanning nearby spots...",
     expanding: "Looking a bit further...",
-    fallbackMessage: "No perfect match, but these are good:",
+    fallbackMessage: "No perfect match, but these are good:", // Single line
     notFound: "No suitable places found here.\nTry different options?",
     filtering: "Picking the best spots for you...",
     aiThinking: "AI Chef is thinking...",
@@ -344,16 +344,16 @@ function useLocalStorageLog() {
   return { log, setLog } as const;
 }
 
-// 修改：淺橘底實心樣式 (PillButton 風格)，統一視覺
+// 修改：放大字體至 13px，增加 padding
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="inline-flex items-center rounded-full px-2 py-0.5 font-medium tracking-wide whitespace-nowrap"
+      className="inline-flex items-center rounded-full px-2.5 py-1 font-medium tracking-wide whitespace-nowrap"
       style={{
-        background: "rgba(255, 211, 106, 0.15)", // 淺橘色背景
-        color: "#6B5D52", // 深色文字
-        border: "none", // 移除邊框，改為實心風格
-        fontSize: "11px"
+        background: "rgba(255, 211, 106, 0.15)", 
+        color: "#6B5D52", 
+        border: "none", 
+        fontSize: "13px" // 視覺修正
       }}
     >
       {children}
@@ -454,8 +454,8 @@ function SwipeableLogItem({ item, onReEat, onPin, onDelete, tease = false, onTea
             )}
           </div>
           <div className="text-lg font-bold mb-2 leading-tight whitespace-normal break-words" style={{ color: warm.text, letterSpacing: "0.01em" }}>{(item.choiceText || "").replace("搜尋：", "")}</div>
-          {/* BUG FIX: 改回 flex-wrap 且限制數量，避免與左滑刪除衝突 */}
-          <div className="flex flex-wrap gap-1 w-full mt-1">
+          
+          <div className="flex flex-wrap gap-1.5 w-full mt-1">
             {item.tags?.slice(0, 3).map((t) => (
               <Tag key={t}>{t}</Tag>
             ))}
@@ -1057,8 +1057,7 @@ export default function App() {
     if (hiddenCandidates.length > 0) {
         targetPlace = hiddenCandidates[Math.floor(Math.random() * hiddenCandidates.length)];
     } else {
-        // Fallback: pick from visible if no hidden (should prevent infinite loop if realPlaces > 3)
-        // But with fix, realPlaces should be > 3 (up to 20), so hiddenCandidates should have items.
+        // Fallback: pick from visible if no hidden
         targetPlace = realPlaces.length > 0 ? realPlaces[Math.floor(Math.random() * realPlaces.length)] : null;
     }
 
@@ -1245,9 +1244,9 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* BUG FIX: 修正提示字重複顯示問題 */}
-                    {!isRealLoading && visiblePlaces.length > 0 && apiError && (
-                      <div className="text-center text-xs text-orange-400 font-bold mb-2 whitespace-pre-line">
+                    {/* 有資料時顯示：隨機模式隱藏 "沒 100% 符合" 訊息 */}
+                    {!isRealLoading && visiblePlaces.length > 0 && apiError && !isRandomMode && (
+                      <div className="text-center text-xs text-orange-400 font-bold mb-2 whitespace-nowrap">
                         {apiError}
                       </div>
                     )}
